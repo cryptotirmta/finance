@@ -194,26 +194,28 @@ const addMonth = (m, k) => { let y = +m.slice(0, 4), mo = +m.slice(5, 7) - 1 + k
 const daysIn = m => new Date(+m.slice(0, 4), +m.slice(5, 7), 0).getDate();
 
 const cat = id => S.categories.find(c => c.id === id);
-const catName = id => (cat(id) || {}).name || 'Без категории';
+const SPECIAL = { __inv: 'Инвестиции', __div: 'Доход от инвестиций' };
+const catName = id => SPECIAL[id] || (cat(id) || {}).name || 'Без категории';
 const acc = id => S.accounts.find(a => a.id === id);
 const accName = id => (acc(id) || {}).name || '—';
 
 /* ===== Расчёты ===== */
 function monthTx(m) { return S.tx.filter(t => t.date.slice(0, 7) === m); }
 function sums(list) {
-  const r = { inc: 0, exp: 0, inv: 0, invUsd: 0, byIn: {}, byOut: {}, byAcc: {} };
+  const r = { inc: 0, exp: 0, inv: 0, invUsd: 0, div: 0, divUsd: 0, byIn: {}, byOut: {}, byAcc: {} };
   for (const t of list) {
     const a = r.byAcc[t.acc] || (r.byAcc[t.acc] = { inc: 0, exp: 0, inv: 0 });
     if (t.type === 'in') { r.inc += t.amount; r.byIn[t.cat] = (r.byIn[t.cat] || 0) + t.amount; a.inc += t.amount; }
     else if (t.type === 'out') { r.exp += t.amount; r.byOut[t.cat] = (r.byOut[t.cat] || 0) + t.amount; a.exp += t.amount; }
     else if (t.type === 'invest') { r.inv += t.amount; r.invUsd += t.usd || 0; a.inv += t.amount; }
+    else if (t.type === 'divest') { r.div += t.amount; r.divUsd += t.usd || 0; a.inc += t.amount; }
   }
   return r;
 }
 function balance(id) {
   const a = acc(id); let b = a ? (+a.start || 0) : 0;
   for (const t of S.tx) {
-    if (t.acc === id) { if (t.type === 'in') b += t.amount; else b -= t.amount; }
+    if (t.acc === id) { if (t.type === 'in' || t.type === 'divest') b += t.amount; else b -= t.amount; }
     if (t.type === 'transfer' && t.to === id) b += t.amount;
   }
   return Math.round(b * 100) / 100;
@@ -224,7 +226,7 @@ function balanceBefore(id, date) {
   const a = acc(id); let b = a && accStart(a) <= date ? (+a.start || 0) : 0;
   for (const t of S.tx) {
     if (t.date >= date) continue;
-    if (t.acc === id) { if (t.type === 'in') b += t.amount; else b -= t.amount; }
+    if (t.acc === id) { if (t.type === 'in' || t.type === 'divest') b += t.amount; else b -= t.amount; }
     if (t.type === 'transfer' && t.to === id) b += t.amount;
   }
   return Math.round(b * 100) / 100;
@@ -340,6 +342,7 @@ async function loadEnc() {
     const b = s => Uint8Array.from(atob(s), ch => ch.charCodeAt(0));
     const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(code), 'PBKDF2', false, ['deriveKey']);
     const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b(enc.salt), iterations: enc.iter, hash: 'SHA-256' }, km, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    if (S.setup && S.tx.length && !confirm(`Заменить текущие данные (операций: ${S.tx.length}) данными из выписок?`)) return;
     let buf; try { buf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b(enc.iv) }, key, b(enc.data)); } catch (e) { return toast('Неверный код'); }
     const d = JSON.parse(new TextDecoder().decode(buf));
     S = d; S.setup = true; save(); render(); toast(`Загружено операций: ${S.tx.length}`);
@@ -428,6 +431,7 @@ function homeView() {
     <tr><td>＋ Приход</td><td class="num">+${eur(s.inc)}</td></tr>
     <tr><td>− Расход</td><td class="num">−${eur(s.exp)}</td></tr>
     ${s.inv ? `<tr><td>− В инвестиции</td><td class="num">−${eur(s.inv)}</td></tr>` : ''}
+    ${s.div ? `<tr><td>＋ Из инвестиций</td><td class="num">+${eur(s.div)}</td></tr>` : ''}
     <tr class="sum"><td>${flowLbl}</td><td class="num ${close < 0 ? 'neg' : ''}">${eur(close)}</td></tr></tbody></table>
     <div class="small muted" style="margin-top:6px">Перемещения между своими счетами общий остаток не меняют.</div></div>
   <div class="card"><div class="row between"><b>Расходы от дохода</b><b class="num ${share > 1 ? 'neg' : ''}">${pct(s.exp, s.inc)}</b></div>
@@ -439,26 +443,27 @@ function homeView() {
   <div class="card"><h2>Доходы и расходы за полгода</h2>${trendChart()}</div>
   <div class="card"><h2>По счетам за ${MONTHS[+M.slice(5) - 1]}, €</h2>
     <table><thead><tr><th>Счёт</th><th>На 1-е</th><th>Приход</th><th>Расход</th><th>${isCur ? 'Сейчас' : 'На конец'}</th></tr></thead><tbody>${accRows}</tbody>
-    <tfoot><tr><td>Итого</td><td class="num">${n2(open)}</td><td class="num">${n2(s.inc)}</td><td class="num">${n2(s.exp + s.inv)}</td><td class="num">${n2(close)}</td></tr></tfoot></table>
-    <div class="small muted" style="margin-top:8px">«Расход» по счёту включает пополнения биржи. Перемещения между своими счетами — не доход и не расход.</div></div>
+    <tfoot><tr><td>Итого</td><td class="num">${n2(open)}</td><td class="num">${n2(s.inc + s.div)}</td><td class="num">${n2(s.exp + s.inv)}</td><td class="num">${n2(close)}</td></tr></tfoot></table>
+    <div class="small muted" style="margin-top:8px">«Расход» по счёту включает пополнения биржи, «Приход» — выводы с биржи. Перемещения между своими счетами — не доход и не расход.</div></div>
   <div class="card"><h2>За всё время</h2><div class="small muted" style="margin-top:-8px;margin-bottom:6px">с ${shortDate(S.startDate)} ${S.startDate.slice(0, 4)}</div>
     <table><tbody><tr><td>Доходы</td><td class="num">${eur(all.inc)}</td></tr><tr><td>Расходы</td><td class="num">${eur(all.exp)}</td></tr>
-    <tr><td>В инвестиции</td><td class="num">${eur(all.inv)} · ${usd(all.invUsd)}</td></tr><tr><td>Расходы от дохода</td><td class="num">${pct(all.exp, all.inc)}</td></tr></tbody></table></div>`;
+    <tr><td>В инвестициях сейчас</td><td class="num">${eur(all.inv - all.div)}</td></tr><tr><td>Расходы от дохода</td><td class="num">${pct(all.exp, all.inc)}</td></tr></tbody></table></div>`;
 }
 
 /* ===== Операции ===== */
 function txLine(t) {
-  const sign = t.type === 'in' ? '+' : t.type === 'transfer' ? '' : '−';
-  const color = t.type === 'in' ? 'var(--inc)' : t.type === 'out' ? 'var(--exp)' : t.type === 'invest' ? 'var(--inv)' : 'var(--ink3)';
-  const title = t.type === 'transfer' ? `Перемещение: ${esc(accName(t.acc))} → ${esc(accName(t.to))}` : t.type === 'invest' ? 'Пополнение биржи' : esc(catName(t.cat));
-  const sub = [t.type === 'transfer' ? '' : esc(accName(t.acc)), t.type === 'invest' ? (t.usd ? usd(t.usd) : '<span class="badge bad">впишите $</span>') : '', esc(t.note || '')].filter(Boolean).join(' · ');
-  return `<button class="it" onclick="${t.type === 'invest' ? `openInv('${t.id}')` : `openTx({id:'${t.id}'})`}"><i class="dot" style="background:${color}"></i>
+  const isInv = t.type === 'invest' || t.type === 'divest';
+  const sign = t.type === 'in' || t.type === 'divest' ? '+' : t.type === 'transfer' ? '' : '−';
+  const color = t.type === 'in' ? 'var(--inc)' : t.type === 'out' ? 'var(--exp)' : isInv ? 'var(--inv)' : 'var(--ink3)';
+  const title = t.type === 'transfer' ? `Перемещение: ${esc(accName(t.acc))} → ${esc(accName(t.to))}` : t.type === 'invest' ? 'Инвестиции' : t.type === 'divest' ? 'Доход от инвестиций' : esc(catName(t.cat));
+  const sub = [t.type === 'transfer' ? '' : esc(accName(t.acc)), isInv ? (t.usd ? usd(t.usd) : '<span class="badge bad">впишите $</span>') : '', esc(t.note || '')].filter(Boolean).join(' · ');
+  return `<button class="it" onclick="openTx({id:'${t.id}'})"><i class="dot" style="background:${color}"></i>
     <div class="grow"><div class="ttl">${title}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>
     <b class="num" style="white-space:nowrap">${sign}${eur(t.amount)}</b></button>`;
 }
 function opsView() {
   let list = monthTx(M);
-  if (opsFilter.type !== 'all') list = list.filter(t => t.type === opsFilter.type);
+  if (opsFilter.type !== 'all') list = list.filter(t => opsFilter.type === 'invest' ? (t.type === 'invest' || t.type === 'divest') : t.type === opsFilter.type);
   if (opsFilter.cat) list = list.filter(t => t.cat === opsFilter.cat);
   list.sort((a, b) => b.date.localeCompare(a.date) || (b.ts || 0) - (a.ts || 0));
   const f = (k, n) => `<button class="chip ${opsFilter.type === k && !opsFilter.cat ? 'on' : ''}" onclick="opsFilter={type:'${k}',cat:null};render()">${n}</button>`;
@@ -477,7 +482,11 @@ function opsView() {
 /* ===== Форма операции ===== */
 let F = null;
 function openTx(o) {
-  if (o.id) { const t = S.tx.find(x => x.id === o.id); F = { ...t }; }
+  if (o.id) {
+    const t = S.tx.find(x => x.id === o.id); F = { ...t };
+    if (t.type === 'invest') { F.type = 'out'; F.cat = '__inv'; }
+    if (t.type === 'divest') { F.type = 'in'; F.cat = '__div'; }
+  }
   else F = { type: o.type || 'out', date: o.date || todayISO(), amount: o.amount || '', cat: o.cat || null, acc: o.acc || lastAcc(), to: null, note: o.note || '', planId: o.planId, planMonth: o.planMonth };
   if (F.type === 'transfer' && !F.to) F.to = S.accounts.find(a => a.id !== F.acc)?.id;
   sheet(txForm());
@@ -486,20 +495,28 @@ function lastAcc() { const t = [...S.tx].reverse().find(x => x.type !== 'transfe
 function txForm() {
   const typeBtn = (k, n) => `<button class="${F.type === k ? 'on' : ''}" onclick="keepAmt();F.type='${k}';F.cat=null;if(k==='transfer'&&!F.to)F.to=S.accounts.find(a=>a.id!==F.acc).id;sheet(txForm())">${n}</button>`;
   const cats = S.categories.filter(c => c.type === F.type && (!c.hidden || c.id === F.cat));
+  const sp = F.type === 'out' ? '__inv' : F.type === 'in' ? '__div' : null, isInv = F.cat === sp && sp;
   const accChips = (field) => S.accounts.map(a => `<button class="chip ${F[field] === a.id ? 'on' : ''}" onclick="keepAmt();F.${field}='${a.id}';sheet(txForm())">${esc(a.name)}</button>`).join('');
   return `<h2>${F.id ? 'Операция' : F.planId ? 'Отметить оплату' : 'Новая операция'}</h2>
   <div class="seg">${typeBtn('out', 'Расход')}${typeBtn('in', 'Приход')}${typeBtn('transfer', 'Перемещение')}</div>
-  <input class="inp big num" id="f_amt" inputmode="decimal" placeholder="0,00 €" value="${F.amount ? String(F.amount).replace('.', ',') : ''}" style="margin-top:14px">
+  <input class="inp big num" id="f_amt" inputmode="decimal" oninput="usdRate()" placeholder="0,00 €" value="${F.amount ? String(F.amount).replace('.', ',') : ''}" style="margin-top:14px">
   <label class="f">Дата</label><input class="inp" type="date" id="f_date" value="${F.date}" onchange="F.date=this.value">
   ${F.type === 'transfer' ? `<p class="small muted" style="margin:10px 0 0">Между своими счетами: на одном ушло, на другом пришло. Не доход и не расход.</p><label class="f">Откуда</label><div class="chips">${accChips('acc')}</div><label class="f">Куда</label><div class="chips">${accChips('to')}</div>` : `
   <label class="f">Категория</label><div class="chips">${cats.map(c => `<button class="chip ${F.cat === c.id ? 'on' : ''}" onclick="keepAmt();F.cat='${c.id}';sheet(txForm())">${esc(c.name)}</button>`).join('')}
+    <button class="chip ${isInv ? 'on' : ''}" style="${isInv ? 'background:var(--inv);color:#fff' : 'color:var(--inv);font-weight:600'}" onclick="keepAmt();F.cat='${sp}';sheet(txForm())">${SPECIAL[sp]}</button>
     <button class="chip add" onclick="keepAmt();newCat(F.type,id=>{F.cat=id;sheet(txForm())})">＋ своя</button></div>
+  ${isInv ? `<label class="f">${F.type === 'out' ? 'Зачислено на биржу, $' : 'Выведено с биржи, $'} <span class="muted">— можно вписать позже</span></label>
+    <input class="inp num" id="f_usd" inputmode="decimal" placeholder="0,00 $" value="${F.usd ? String(F.usd).replace('.', ',') : ''}" oninput="usdRate()">
+    <div class="small muted num" id="f_rate" style="margin-top:4px">${rateText(parseNum(F.amount), parseNum(F.usd))}</div>
+    <p class="small muted" style="margin:6px 0 0">${F.type === 'out' ? 'Не считается расходом — попадёт во вкладку «Инвестиции».' : 'Не считается зарплатой или доходом месяца — уменьшит сумму в инвестициях и вернёт деньги на счёт.'}</p>` : ''}
   <label class="f">${F.type === 'in' ? 'Куда поступило' : 'Откуда списано'}</label><div class="chips">${accChips('acc')}</div>`}
   <label class="f">Комментарий</label><input class="inp" id="f_note" value="${esc(F.note || '')}" placeholder="необязательно">
   <div style="margin-top:20px"><button class="btn" onclick="saveTx()">Сохранить</button>
   ${F.id ? `<button class="btn danger" onclick="delTx()">Удалить</button>` : ''}</div>`;
 }
-function keepAmt() { const a = document.getElementById('f_amt'), n = document.getElementById('f_note'); if (a) F.amount = a.value; if (n) F.note = n.value; const d = document.getElementById('f_date'); if (d) F.date = d.value; }
+const rateText = (e, u) => e > 0 && u > 0 ? 'Курс: 1 € = ' + (u / e).toFixed(4).replace('.', ',') + ' $' : '';
+function usdRate() { const r = document.getElementById('f_rate'); if (r) r.textContent = rateText(parseNum(document.getElementById('f_amt').value), parseNum(document.getElementById('f_usd').value)); }
+function keepAmt() { const u = document.getElementById('f_usd'); if (u) F.usd = u.value; const a = document.getElementById('f_amt'), n = document.getElementById('f_note'); if (a) F.amount = a.value; if (n) F.note = n.value; const d = document.getElementById('f_date'); if (d) F.date = d.value; }
 function saveTx() {
   keepAmt();
   const amount = parseNum(F.amount);
@@ -508,7 +525,9 @@ function saveTx() {
   if (F.type !== 'transfer' && !F.cat) return toast('Выберите категорию');
   if (F.type === 'transfer' && F.acc === F.to) return toast('Счета должны отличаться');
   const t = { id: F.id || uid(), ts: F.ts || Date.now(), type: F.type, date: F.date, amount, acc: F.acc, note: (F.note || '').trim() };
-  if (F.type === 'transfer') t.to = F.to; else t.cat = F.cat;
+  if (F.type === 'transfer') t.to = F.to;
+  else if (F.cat === '__inv' || F.cat === '__div') { t.type = F.cat === '__inv' ? 'invest' : 'divest'; const u = parseNum(F.usd); t.usd = u > 0 ? u : 0; }
+  else t.cat = F.cat;
   if (F.planId) { t.planId = F.planId; t.planMonth = F.planMonth; }
   const i = S.tx.findIndex(x => x.id === t.id); if (i >= 0) S.tx[i] = t; else S.tx.push(t);
   save(); closeSheet(); M = t.date.slice(0, 7); render(); toast(F.planId && i < 0 ? 'Оплачено и убрано из плана' : 'Сохранено');
@@ -565,6 +584,7 @@ function planForm() {
   ${P.monthly ? `<label class="f">День списания</label><input class="inp num" id="p_day" inputmode="numeric" value="${P.day || 1}">`
       : `<label class="f">Когда</label><input class="inp" type="date" id="p_date" value="${P.date || todayISO()}">`}
   <label class="f">Категория</label><div class="chips">${cats.map(c => `<button class="chip ${P.cat === c.id ? 'on' : ''}" onclick="keepPlan();P.cat='${c.id}';sheet(planForm())">${esc(c.name)}</button>`).join('')}
+    <button class="chip ${P.cat === '__inv' ? 'on' : ''}" onclick="keepPlan();P.cat='__inv';sheet(planForm())">Инвестиции</button>
     <button class="chip add" onclick="keepPlan();newCat('out',id=>{P.cat=id;sheet(planForm())})">＋ своя</button></div>
   <label class="f">Откуда обычно платится</label><div class="chips">${S.accounts.map(a => `<button class="chip ${P.acc === a.id ? 'on' : ''}" onclick="keepPlan();P.acc='${a.id}';sheet(planForm())">${esc(a.name)}</button>`).join('')}</div>
   <div style="margin-top:20px"><button class="btn" onclick="savePlan()">Сохранить</button>
@@ -593,46 +613,22 @@ function delPlan() {
 
 /* ===== Инвестиции ===== */
 function invView() {
-  const list = S.tx.filter(t => t.type === 'invest').sort((a, b) => b.date.localeCompare(a.date));
-  const e = list.reduce((s, t) => s + t.amount, 0), u = list.reduce((s, t) => s + (t.usd || 0), 0);
-  const ms = sums(monthTx(M));
+  const list = S.tx.filter(t => t.type === 'invest' || t.type === 'divest').sort((a, b) => b.date.localeCompare(a.date) || (b.ts || 0) - (a.ts || 0));
+  const all = sums(S.tx), ms = sums(monthTx(M));
+  const nowE = all.inv - all.div, nowU = all.invUsd - all.divUsd;
+  const noUsd = list.filter(t => !t.usd).length;
   return `<h1>Инвестиции</h1>
-  <div class="tiles"><div class="tile"><div class="lbl">Вложено всего</div><div class="val num">${eur0(e)}</div></div>
-  <div class="tile"><div class="lbl">Зачислено на биржу</div><div class="val num">${nf0.format(Math.round(u))} $</div></div></div>
-  <div class="card"><div class="row between"><span class="ink2">Средний курс</span><b class="num">${e > 0 && u > 0 ? '1 € = ' + (u / e).toFixed(4).replace('.', ',') + ' $' : '—'}</b></div>
-  <div class="row between" style="margin-top:8px"><span class="ink2">За ${MONTHS[+M.slice(5) - 1]}</span><b class="num">${eur(ms.inv)} · ${usd(ms.invUsd)}</b></div>
-  <div class="row between" style="margin-top:8px"><span class="ink2">Доля от дохода за месяц</span><b class="num">${pct(ms.inv, ms.inc)}</b></div></div>
-  <button class="btn" style="background:var(--inv);color:#fff" onclick="openInv()">＋ Пополнить биржу</button>
-  <div class="card list" style="padding:4px 16px">${list.length ? list.map(t => txLine(t).replace('Пополнение биржи', 'Пополнение · ' + shortDate(t.date) + ' ' + t.date.slice(0, 4))).join('') : '<div class="empty">Пополнений пока нет</div>'}</div>
-  <p class="small muted">Пополнение биржи списывает евро со счёта, но не считается расходом — на главной оно показано отдельно, «В инвестиции».</p>`;
-}
-let I = null;
-function openInv(id) {
-  I = id ? { ...S.tx.find(x => x.id === id) } : { type: 'invest', date: todayISO(), amount: '', usd: '', acc: 'revolut', note: '' };
-  if (!acc(I.acc)) I.acc = S.accounts[0].id;
-  sheet(invForm());
-}
-function keepInv() { const g = k => document.getElementById(k); I.amount = g('i_eur').value; I.usd = g('i_usd').value; I.date = g('i_date').value; I.note = g('i_note').value; }
-function invRate() { const e = parseNum(document.getElementById('i_eur').value), u = parseNum(document.getElementById('i_usd').value); document.getElementById('i_rate').textContent = e > 0 && u > 0 ? 'Курс: 1 € = ' + (u / e).toFixed(4).replace('.', ',') + ' $' : ''; }
-function invForm() {
-  return `<h2>${I.id ? 'Пополнение биржи' : 'Пополнить биржу'}</h2>
-  <label class="f">Списано, €</label><input class="inp big num" id="i_eur" inputmode="decimal" oninput="invRate()" value="${I.amount ? String(I.amount).replace('.', ',') : ''}" placeholder="0,00 €">
-  <label class="f">Зачислено на биржу, $</label><input class="inp big num" id="i_usd" inputmode="decimal" oninput="invRate()" value="${I.usd ? String(I.usd).replace('.', ',') : ''}" placeholder="0,00 $">
-  <div class="small muted num" id="i_rate" style="text-align:center;margin-top:6px"></div>
-  <label class="f">Дата</label><input class="inp" type="date" id="i_date" value="${I.date}">
-  <label class="f">С какого счёта</label><div class="chips">${S.accounts.map(a => `<button class="chip ${I.acc === a.id ? 'on' : ''}" onclick="keepInv();I.acc='${a.id}';sheet(invForm());invRate()">${esc(a.name)}</button>`).join('')}</div>
-  <label class="f">Комментарий</label><input class="inp" id="i_note" value="${esc(I.note || '')}" placeholder="например, брокер">
-  <div style="margin-top:20px"><button class="btn" style="background:var(--inv);color:#fff" onclick="saveInv()">Сохранить</button>
-  ${I.id ? `<button class="btn danger" onclick="F={id:I.id};delTx()">Удалить</button>` : ''}</div>`;
-}
-function saveInv() {
-  keepInv();
-  const amount = parseNum(I.amount), u = parseNum(I.usd);
-  if (!(amount > 0)) return toast('Сколько евро списано?');
-  if (!(u > 0)) return toast('Сколько долларов зачислено?');
-  const t = { id: I.id || uid(), ts: I.ts || Date.now(), type: 'invest', date: I.date || todayISO(), amount, usd: u, acc: I.acc, note: (I.note || '').trim() };
-  const i = S.tx.findIndex(x => x.id === t.id); if (i >= 0) S.tx[i] = t; else S.tx.push(t);
-  save(); closeSheet(); render(); toast('Сохранено');
+  <div class="tiles"><div class="tile"><div class="lbl"><i class="dot" style="background:var(--inv)"></i>Сейчас в инвестициях</div><div class="val num ${nowE < 0 ? 'pos' : ''}">${eur0(nowE)}</div></div>
+  <div class="tile"><div class="lbl">На бирже, $</div><div class="val num">${nf0.format(Math.round(nowU))} $</div></div></div>
+  ${noUsd ? `<div class="card small" style="color:var(--bad)">У ${noUsd} операц. не вписана сумма в $ — нажмите на неё ниже.</div>` : ''}
+  <div class="card"><table><tbody>
+    <tr><td>Вложено всего</td><td class="num">${eur(all.inv)} · ${usd(all.invUsd)}</td></tr>
+    <tr><td>Выведено всего</td><td class="num">${eur(all.div)} · ${usd(all.divUsd)}</td></tr>
+    ${nowE < 0 ? `<tr><td>Получено сверх вложенного</td><td class="num pos">+${eur(-nowE)}</td></tr>` : ''}
+    <tr><td>Средний курс пополнений</td><td class="num">${all.inv > 0 && all.invUsd > 0 ? '1 € = ' + (all.invUsd / all.inv).toFixed(4).replace('.', ',') + ' $' : '—'}</td></tr>
+    <tr><td>За ${MONTHS[+M.slice(5) - 1]}: вложено / выведено</td><td class="num">${eur(ms.inv)} / ${eur(ms.div)}</td></tr></tbody></table></div>
+  <div class="card list" style="padding:4px 16px">${list.length ? list.map(t => txLine(t).replace(/(Инвестиции|Доход от инвестиций)<\/div>/, `$1 · ${shortDate(t.date)} ${t.date.slice(0, 4)}</div>`)).join('') : '<div class="empty">Операций с инвестициями пока нет</div>'}</div>
+  <p class="small muted">Пополнить: «− Расход» → категория «Инвестиции» (с любого счёта или из наличных).<br>Вывести: «＋ Приход» → «Доход от инвестиций» — сумма в инвестициях уменьшится.<br>Ни то ни другое не считается обычным расходом или доходом месяца.</p>`;
 }
 
 /* ===== Ещё: счета, категории, копия ===== */
@@ -646,6 +642,9 @@ function moreView() {
     <button class="linkbtn" style="display:block" onclick="openTx({type:'transfer'})">⇄ Перемещение между счетами</button></div>
   <div class="card"><h2>Категории расходов</h2><div class="list">${catList('out')}</div><button class="linkbtn" onclick="newCat('out',()=>render())">＋ Добавить</button></div>
   <div class="card"><h2>Категории доходов</h2><div class="list">${catList('in')}</div><button class="linkbtn" onclick="newCat('in',()=>render())">＋ Добавить</button></div>
+  <div class="card"><h2>Загрузить мои данные</h2><p class="small ink2" style="margin-top:-6px">Операции из выписок, разнесённые по категориям. Заменят текущие данные.</p>
+    <input class="inp" id="enc_code" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="код доступа">
+    <button class="btn" style="margin-top:10px" onclick="loadEnc()">Загрузить</button></div>
   <div class="card"><h2>Резервная копия</h2><p class="small ink2" style="margin-top:-6px">Данные лежат только в этом телефоне. Раз в месяц сохраняйте копию в «Файлы» или iCloud Drive.</p>
     <button class="btn sec" onclick="exportFile()">Сохранить копию</button><button class="btn sec" onclick="importFile()">Восстановить из копии</button>
     <p class="small muted">Операций: ${S.tx.length} · учёт с ${shortDate(S.startDate)} ${S.startDate.slice(0, 4)}</p></div>
