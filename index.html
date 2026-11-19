@@ -66,6 +66,7 @@ th{font-weight:500;color:var(--ink3);font-size:12px;text-align:right;padding:6px
 th:first-child,td:first-child{text-align:left}
 td{padding:9px 0;border-top:1px solid var(--line);text-align:right}
 tfoot td{font-weight:650}
+td+td,th+th{padding-left:8px}
 .legend{display:flex;gap:14px;font-size:13px;color:var(--ink2);margin-bottom:6px}
 .legend span{display:flex;align-items:center;gap:6px}
 .chart-cap{font-size:13px;color:var(--ink2);min-height:18px;margin-top:6px}
@@ -120,6 +121,14 @@ label.f{display:block;margin:14px 0 6px;font-size:13px;color:var(--ink2)}
 .toast.on{opacity:1}
 .pos{color:var(--good)} .neg{color:var(--bad)}
 svg text{fill:var(--ink3);font-size:11px}
+.bal{background:var(--card);border-radius:var(--r);padding:14px 16px;margin:10px 0 6px;box-shadow:0 1px 0 var(--line)}
+.bal-total{display:flex;justify-content:space-between;align-items:baseline}
+.bal-total b{font-size:24px;letter-spacing:-.01em}
+.bal-accs{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px;margin-top:10px}
+.bal-accs button{background:var(--bg);border-radius:12px;padding:8px 10px;text-align:left;display:flex;flex-direction:column;gap:2px;min-width:0}
+.bal-accs b{font-size:15px;white-space:nowrap}
+.flow td{padding:8px 0}
+.flow tr.sum td{font-weight:650;border-top:1.5px solid var(--ink3)}
 </style>
 </head>
 <body>
@@ -207,6 +216,22 @@ function balance(id) {
     if (t.type === 'transfer' && t.to === id) b += t.amount;
   }
   return Math.round(b * 100) / 100;
+}
+/* Остаток счёта на начало дня `date` (операции строго раньше этой даты). */
+function balanceBefore(id, date) {
+  const a = acc(id); let b = a ? (+a.start || 0) : 0;
+  for (const t of S.tx) {
+    if (t.date >= date) continue;
+    if (t.acc === id) { if (t.type === 'in') b += t.amount; else b -= t.amount; }
+    if (t.type === 'transfer' && t.to === id) b += t.amount;
+  }
+  return Math.round(b * 100) / 100;
+}
+const totalBefore = date => S.accounts.reduce((s, a) => s + balanceBefore(a.id, date), 0);
+function balancesStrip() {
+  const total = S.accounts.reduce((s, a) => s + balance(a.id), 0);
+  return `<div class="bal"><div class="bal-total"><span class="ink2 small">Сейчас на счетах</span><b class="num">${eur(total)}</b></div>
+  <div class="bal-accs">${S.accounts.map(a => `<button onclick="editAcc('${a.id}')"><span class="small ink2">${esc(a.name)}</span><b class="num ${balance(a.id) < 0 ? 'neg' : ''}">${eur(balance(a.id))}</b></button>`).join('')}</div></div>`;
 }
 /* План: ежемесячные платежи повторяются сами, разовые — в своём месяце.
    Неоплаченный разовый из прошлого месяца показывается в текущем как «просрочен». */
@@ -367,14 +392,25 @@ function homeView() {
   const share = s.inc > 0 ? s.exp / s.inc : 0;
   const total = S.accounts.reduce((a, x) => a + balance(x.id), 0);
   const all = sums(S.tx);
-  const accRows = S.accounts.map(a => { const r = s.byAcc[a.id] || { inc: 0, exp: 0, inv: 0 }; return `<tr><td>${esc(a.name)}</td><td class="num">${eur(r.inc)}</td><td class="num">${eur(r.exp + r.inv)}</td><td class="num"><b>${eur(balance(a.id))}</b></td></tr>`; }).join('');
-  return `<h1>Личные финансы</h1>${monthNav()}
+  const d0 = M + '-01', d1 = addMonth(M, 1) + '-01', isCur = M === thisMonth();
+  const open = totalBefore(d0), close = totalBefore(d1);
+  const n2 = v => nf.format(v || 0);
+  const accRows = S.accounts.map(a => { const r = s.byAcc[a.id] || { inc: 0, exp: 0, inv: 0 }; return `<tr><td>${esc(a.name)}</td><td class="num">${n2(balanceBefore(a.id, d0))}</td><td class="num">${n2(r.inc)}</td><td class="num">${n2(r.exp + r.inv)}</td><td class="num"><b>${n2(balanceBefore(a.id, d1))}</b></td></tr>`; }).join('');
+  const flowLbl = isCur ? 'Сейчас' : 'На конец месяца';
+  return `<h1>Личные финансы</h1>${balancesStrip()}${monthNav()}
   <div class="tiles">
     <div class="tile"><div class="lbl"><i class="dot" style="background:var(--inc)"></i>Доходы</div><div class="val num">${eur0(s.inc)}</div></div>
     <div class="tile"><div class="lbl"><i class="dot" style="background:var(--exp)"></i>Расходы</div><div class="val num">${eur0(s.exp)}</div></div>
     <div class="tile"><div class="lbl"><i class="dot" style="background:var(--inv)"></i>В инвестиции</div><div class="val num">${eur0(s.inv)}</div></div>
     <div class="tile"><div class="lbl">Итог месяца</div><div class="val num ${result >= 0 ? 'pos' : 'neg'}">${result >= 0 ? '+' : '−'}${eur0(Math.abs(result))}</div></div>
   </div>
+  <div class="card"><h2>Движение денег</h2><table class="flow"><tbody>
+    <tr><td>На 1 ${MONTHS_G[+M.slice(5) - 1]}</td><td class="num">${eur(open)}</td></tr>
+    <tr><td>＋ Приход</td><td class="num">+${eur(s.inc)}</td></tr>
+    <tr><td>− Расход</td><td class="num">−${eur(s.exp)}</td></tr>
+    ${s.inv ? `<tr><td>− В инвестиции</td><td class="num">−${eur(s.inv)}</td></tr>` : ''}
+    <tr class="sum"><td>${flowLbl}</td><td class="num ${close < 0 ? 'neg' : ''}">${eur(close)}</td></tr></tbody></table>
+    <div class="small muted" style="margin-top:6px">Перемещения между своими счетами общий остаток не меняют.</div></div>
   <div class="card"><div class="row between"><b>Расходы от дохода</b><b class="num ${share > 1 ? 'neg' : ''}">${pct(s.exp, s.inc)}</b></div>
     <div class="meter"><i style="width:${Math.min(100, share * 100)}%;background:${share > 1 ? 'var(--bad)' : 'var(--exp)'}"></i></div>
     <div class="small ink2 num">Потрачено ${eur(s.exp)} из ${eur(s.inc)}${s.inv ? ` · в инвестиции ${pct(s.inv, s.inc)} дохода` : ''}</div></div>
@@ -383,10 +419,10 @@ function homeView() {
   <div class="card"><h2>Расходы по категориям</h2>${hbars(s.byOut, s.exp, s.inc, 'var(--exp)', 'out')}</div>
   <div class="card"><h2>Доходы по категориям</h2>${hbars(s.byIn, s.inc, 0, 'var(--inc)', 'in')}</div>
   <div class="card"><h2>Доходы и расходы за полгода</h2>${trendChart()}</div>
-  <div class="card"><h2>По источникам за ${MONTHS[+M.slice(5) - 1]}</h2>
-    <table><thead><tr><th>Счёт</th><th>Приход</th><th>Расход</th><th>Остаток</th></tr></thead><tbody>${accRows}</tbody>
-    <tfoot><tr><td>Итого</td><td class="num">${eur(s.inc)}</td><td class="num">${eur(s.exp + s.inv)}</td><td class="num">${eur(total)}</td></tr></tfoot></table>
-    <div class="small muted" style="margin-top:8px">«Расход» по счёту включает пополнения биржи. Переводы между своими счетами — не доход и не расход.</div></div>
+  <div class="card"><h2>По счетам за ${MONTHS[+M.slice(5) - 1]}, €</h2>
+    <table><thead><tr><th>Счёт</th><th>На 1-е</th><th>Приход</th><th>Расход</th><th>${isCur ? 'Сейчас' : 'На конец'}</th></tr></thead><tbody>${accRows}</tbody>
+    <tfoot><tr><td>Итого</td><td class="num">${n2(open)}</td><td class="num">${n2(s.inc)}</td><td class="num">${n2(s.exp + s.inv)}</td><td class="num">${n2(close)}</td></tr></tfoot></table>
+    <div class="small muted" style="margin-top:8px">«Расход» по счёту включает пополнения биржи. Перемещения между своими счетами — не доход и не расход.</div></div>
   <div class="card"><h2>За всё время</h2><div class="small muted" style="margin-top:-8px;margin-bottom:6px">с ${shortDate(S.startDate)} ${S.startDate.slice(0, 4)}</div>
     <table><tbody><tr><td>Доходы</td><td class="num">${eur(all.inc)}</td></tr><tr><td>Расходы</td><td class="num">${eur(all.exp)}</td></tr>
     <tr><td>В инвестиции</td><td class="num">${eur(all.inv)} · ${usd(all.invUsd)}</td></tr><tr><td>Расходы от дохода</td><td class="num">${pct(all.exp, all.inc)}</td></tr></tbody></table></div>`;
@@ -408,7 +444,7 @@ function opsView() {
   if (opsFilter.cat) list = list.filter(t => t.cat === opsFilter.cat);
   list.sort((a, b) => b.date.localeCompare(a.date) || (b.ts || 0) - (a.ts || 0));
   const f = (k, n) => `<button class="chip ${opsFilter.type === k && !opsFilter.cat ? 'on' : ''}" onclick="opsFilter={type:'${k}',cat:null};render()">${n}</button>`;
-  let html = `<h1>Операции</h1>${monthNav()}<div class="chips" style="margin:8px 0">${f('all', 'Все')}${f('in', 'Приходы')}${f('out', 'Расходы')}${f('transfer', 'Перемещения')}${f('invest', 'Инвестиции')}
+  let html = `<h1>Операции</h1>${balancesStrip()}${monthNav()}<div class="chips" style="margin:8px 0">${f('all', 'Все')}${f('in', 'Приходы')}${f('out', 'Расходы')}${f('transfer', 'Перемещения')}${f('invest', 'Инвестиции')}
     ${opsFilter.cat ? `<button class="chip on" onclick="opsFilter.cat=null;render()">${esc(catName(opsFilter.cat))} ✕</button>` : ''}</div>`;
   if (!list.length) return html + '<div class="card"><div class="empty">Операций нет. Нажмите «＋ Приход» или «− Расход».</div></div>';
   const days = {}; for (const t of list) (days[t.date] = days[t.date] || []).push(t);
