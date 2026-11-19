@@ -386,6 +386,21 @@ function trendChart() {
 }
 function trendCap(i) { const d = window._trend[i]; document.getElementById('trendCap').innerHTML = `<b style="text-transform:capitalize">${monthName(d.m)}</b>: доходы ${eur(d.inc)} · расходы ${eur(d.exp)} · ${d.exp && d.inc ? 'расходы ' + pct(d.exp, d.inc) + ' дохода' : ''}`; }
 
+function planCard(pl, left, result) {
+  const rest = pl.filter(x => !x.tx), t = todayISO();
+  const rows = rest.map(x => {
+    const late = x.overdue || x.date < t;
+    return `<div class="it" style="padding:9px 0">
+      <span class="num small" style="width:48px;flex:none;${late ? 'color:var(--bad);font-weight:600' : 'color:var(--ink2)'}">${shortDate(x.date)}</span>
+      <div class="grow"><div class="ttl" style="font-size:14px">${esc(x.p.name)}</div><div class="sub">${esc(catName(x.p.cat))}${x.p.monthly ? ' · каждый месяц' : ''}${late ? ' · <span style="color:var(--bad)">срок прошёл</span>' : ''}</div></div>
+      <b class="num" style="font-size:14px;white-space:nowrap">${eur(x.p.amount)}</b>
+      <button class="chk" style="width:28px;height:28px" onclick="event.stopPropagation();payPlan('${x.p.id}','${x.month}','${x.date}')" aria-label="Оплачено">✓</button></div>`;
+  }).join('');
+  return `<div class="card"><div class="row between"><b>Ещё предстоит по плану</b><b class="num">${eur(left)}</b></div>
+    <div class="list" style="margin-top:6px">${rows || '<div class="empty" style="padding:12px 0">Всё по плану оплачено</div>'}</div>
+    <div class="row between small" style="margin-top:8px"><span class="ink2">Свободно после плана: <b class="num ${result - left < 0 ? 'neg' : ''}" style="white-space:nowrap">${eur(result - left)}</b></span>
+    <button class="linkbtn" style="font-size:14px" onclick="go('plan')">Весь план ›</button></div></div>`;
+}
 function homeView() {
   const s = sums(monthTx(M)), pl = planFor(M), left = pl.filter(x => !x.tx).reduce((a, x) => a + x.p.amount, 0);
   const result = s.inc - s.exp; /* инвестиции — не трата, показываются отдельно */
@@ -414,8 +429,7 @@ function homeView() {
   <div class="card"><div class="row between"><b>Расходы от дохода</b><b class="num ${share > 1 ? 'neg' : ''}">${pct(s.exp, s.inc)}</b></div>
     <div class="meter"><i style="width:${Math.min(100, share * 100)}%;background:${share > 1 ? 'var(--bad)' : 'var(--exp)'}"></i></div>
     <div class="small ink2 num">Потрачено ${eur(s.exp)} из ${eur(s.inc)}${s.inv ? ` · в инвестиции ${pct(s.inv, s.inc)} дохода` : ''}</div></div>
-  <div class="card" onclick="go('plan')" style="cursor:pointer"><div class="row between"><b>Ещё предстоит по плану</b><b class="num">${eur(left)}</b></div>
-    <div class="small ink2" style="margin-top:4px">${pl.filter(x => !x.tx).length} платеж(а) из ${pl.length} · свободно после плана: <b class="num ${result - left < 0 ? 'neg' : ''}">${eur(result - left)}</b></div></div>
+  ${planCard(pl, left, result)}
   <div class="card"><h2>Расходы по категориям</h2>${hbars(s.byOut, s.exp, s.inc, 'var(--exp)', 'out')}</div>
   <div class="card"><h2>Доходы по категориям</h2>${hbars(s.byIn, s.inc, 0, 'var(--inc)', 'in')}</div>
   <div class="card"><h2>Доходы и расходы за полгода</h2>${trendChart()}</div>
