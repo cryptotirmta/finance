@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Личные финансы">
+<meta name="theme-color" content="#f5f5f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121211" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>Личные финансы</title>
+<style>
+:root{
+  color-scheme:light;
+  --bg:#f5f5f2; --card:#ffffff; --ink:#151514; --ink2:#55544f; --ink3:#8a8984; --line:#e6e5e0; --chip:#efeee9;
+  --accent:#1f6f5c; --accent-ink:#fff;
+  --inc:#2a78d6; --exp:#eb6834; --inv:#6250d6;
+  --good:#1d7a3e; --bad:#c23a2b; --warn:#a86a00;
+  --r:16px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#121211; --card:#1c1c1b; --ink:#f0efec; --ink2:#c3c2b7; --ink3:#8d8c85; --line:#2d2d2b; --chip:#2a2a28;
+    --accent:#3fa58a; --accent-ink:#0d1f1a;
+    --inc:#3987e5; --exp:#d95926; --inv:#9085e9;
+    --good:#4cc077; --bad:#ef6b5c; --warn:#e0a43a;
+  }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.35 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif}
+body{padding:env(safe-area-inset-top) 0 calc(76px + env(safe-area-inset-bottom));min-height:100vh;overscroll-behavior-y:none}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+input,select,textarea{font:inherit;color:var(--ink)}
+.wrap{max-width:560px;margin:0 auto;padding:8px 16px 24px}
+h1{font-size:28px;margin:10px 0 4px;letter-spacing:-.02em}
+h2{font-size:17px;margin:0 0 12px}
+.muted{color:var(--ink3)} .ink2{color:var(--ink2)} .small{font-size:13px}
+.num{font-variant-numeric:tabular-nums}
+.card{background:var(--card);border-radius:var(--r);padding:16px;margin:12px 0;box-shadow:0 1px 0 var(--line)}
+.row{display:flex;align-items:center;gap:10px}
+.between{justify-content:space-between}
+.grow{flex:1;min-width:0}
+.monthnav{display:flex;align-items:center;justify-content:space-between;margin:4px 0 4px}
+.monthnav b{font-size:17px;text-transform:capitalize}
+.iconbtn{width:40px;height:40px;border-radius:20px;display:grid;place-items:center;font-size:20px;color:var(--ink2)}
+.iconbtn:active{background:var(--chip)}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.tile{background:var(--card);border-radius:var(--r);padding:14px;box-shadow:0 1px 0 var(--line)}
+.tile .lbl{font-size:13px;color:var(--ink2);display:flex;align-items:center;gap:6px}
+.tile .val{font-size:22px;font-weight:650;letter-spacing:-.01em;margin-top:4px}
+.dot{width:8px;height:8px;border-radius:4px;display:inline-block;flex:none}
+.meter{height:10px;background:var(--chip);border-radius:5px;overflow:hidden;margin:8px 0 6px}
+.meter i{display:block;height:100%;border-radius:5px}
+.hbar{display:grid;grid-template-columns:minmax(90px,38%) 1fr auto;align-items:center;gap:10px;padding:7px 0;width:100%;text-align:left}
+.hbar .track{height:12px;border-radius:0 4px 4px 0}
+.hbar .nm{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hbar .amt{font-size:14px;text-align:right;white-space:nowrap}
+.hbar .amt small{display:block;color:var(--ink3);font-size:11px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font-weight:500;color:var(--ink3);font-size:12px;text-align:right;padding:6px 0}
+th:first-child,td:first-child{text-align:left}
+td{padding:9px 0;border-top:1px solid var(--line);text-align:right}
+tfoot td{font-weight:650}
+.legend{display:flex;gap:14px;font-size:13px;color:var(--ink2);margin-bottom:6px}
+.legend span{display:flex;align-items:center;gap:6px}
+.chart-cap{font-size:13px;color:var(--ink2);min-height:18px;margin-top:6px}
+.list .it{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line);width:100%;text-align:left}
+.list .it:first-child{border-top:0}
+.list .ttl{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.list .sub{font-size:12px;color:var(--ink3)}
+.daycap{display:flex;justify-content:space-between;font-size:13px;color:var(--ink3);margin:16px 4px 4px}
+.badge{font-size:11px;padding:2px 7px;border-radius:8px;background:var(--chip);color:var(--ink2);white-space:nowrap}
+.badge.bad{color:var(--bad)}
+.chk{width:30px;height:30px;border-radius:15px;border:2px solid var(--line);flex:none;display:grid;place-items:center;font-size:16px;color:transparent}
+.chk.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn{display:block;width:100%;padding:14px;border-radius:14px;background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:16px;text-align:center}
+.btn.sec{background:var(--chip);color:var(--ink)}
+.btn.danger{background:transparent;color:var(--bad)}
+.btn+.btn{margin-top:8px}
+.linkbtn{color:var(--accent);font-weight:600;font-size:15px;padding:6px 0}
+.actions{position:fixed;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom));display:flex;gap:10px;padding:10px 16px;max-width:560px;margin:0 auto;z-index:5;pointer-events:none}
+.actions button{pointer-events:auto;flex:1;padding:14px;border-radius:16px;font-weight:650;font-size:16px;box-shadow:0 6px 18px rgba(0,0,0,.18)}
+.actions .in{background:var(--inc);color:#fff}
+.actions .out{background:var(--exp);color:#fff}
+.actions .mv{flex:0 0 56px;background:var(--card);color:var(--ink);font-size:20px}
+.has-actions{padding-bottom:84px}
+[hidden]{display:none!important}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;background:color-mix(in srgb,var(--card) 92%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);display:flex;padding:6px 4px calc(6px + env(safe-area-inset-bottom));z-index:6}
+nav.tabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--ink3);padding:4px 0}
+nav.tabs button svg{width:24px;height:24px}
+nav.tabs button.on{color:var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:8px 12px;border-radius:12px;background:var(--chip);font-size:14px}
+.chip.on{background:var(--accent);color:var(--accent-ink)}
+.chip.add{background:transparent;border:1.5px dashed var(--line);color:var(--ink2)}
+.seg{display:flex;background:var(--chip);border-radius:12px;padding:3px;gap:3px}
+.seg button{flex:1;padding:9px 4px;border-radius:10px;font-size:14px;font-weight:600;color:var(--ink2)}
+.seg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+label.f{display:block;margin:14px 0 6px;font-size:13px;color:var(--ink2)}
+.inp{width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-size:16px;-webkit-appearance:none;appearance:none;min-height:48px}
+.inp.big{font-size:30px;font-weight:650;text-align:center;padding:10px}
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:20;opacity:0;transition:opacity .2s}
+.sheet{position:fixed;left:0;right:0;bottom:0;max-height:92vh;overflow:auto;background:var(--card);border-radius:20px 20px 0 0;z-index:21;padding:8px 16px calc(20px + env(safe-area-inset-bottom));transform:translateY(100%);transition:transform .25s ease;max-width:560px;margin:0 auto}
+.sheet.open{transform:none}.sheet-bg.open{opacity:1}
+.grab{width:40px;height:5px;border-radius:3px;background:var(--line);margin:4px auto 10px}
+.sheet h2{font-size:20px;text-align:center}
+.switch{position:relative;width:51px;height:31px;flex:none}
+.switch input{opacity:0;width:0;height:0}
+.switch span{position:absolute;inset:0;background:var(--chip);border-radius:16px;transition:.2s}
+.switch span:before{content:"";position:absolute;width:27px;height:27px;left:2px;top:2px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.switch input:checked+span{background:var(--accent)}
+.switch input:checked+span:before{transform:translateX(20px)}
+.empty{padding:24px 0;text-align:center;color:var(--ink3);font-size:14px}
+.toast{position:fixed;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;z-index:30;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+.pos{color:var(--good)} .neg{color:var(--bad)}
+svg text{fill:var(--ink3);font-size:11px}
+</style>
+</head>
+<body>
+<main id="view" class="wrap"></main>
+<div class="actions" id="actions" hidden>
+  <button class="in" onclick="openTx({type:'in'})">＋ Приход</button>
+  <button class="out" onclick="openTx({type:'out'})">− Расход</button>
+  <button class="mv" onclick="openTx({type:'transfer'})" aria-label="Перемещение между счетами">⇄</button>
+</div>
+<nav class="tabs" id="tabs"></nav>
+<div class="sheet-bg" id="sheetBg" hidden onclick="closeSheet()"></div>
+<div class="sheet" id="sheet" hidden></div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+/* ===== Хранилище (только на этом устройстве) ===== */
+const LS = 'lichnye-finansy.v1';
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const pad = n => String(n).padStart(2, '0');
+const todayISO = () => { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+const thisMonth = () => todayISO().slice(0, 7);
+
+function defaults() {
+  const c = (type, name) => ({ id: uid(), type, name, hidden: false });
+  return {
+    v: 1, setup: false, startDate: todayISO(),
+    accounts: [
+      { id: 'revolut', name: 'Revolut', kind: 'bank', start: 0 },
+      { id: 'wise', name: 'Wise', kind: 'bank', start: 0 },
+      { id: 'cash', name: 'Наличные', kind: 'cash', start: 0 }
+    ],
+    categories: [
+      c('in', 'Заработная плата'), c('in', 'Подарки'), c('in', 'Прочий доход'),
+      c('out', 'Коммуналка'), c('out', 'Одежда'), c('out', 'Салон'), c('out', 'Косметика'),
+      c('out', 'Подарки'), c('out', 'Развлечения'), c('out', 'ПО и подписки'), c('out', 'Обучение'), c('out', 'Прочие')
+    ],
+    tx: [], plans: []
+  };
+}
+function load() { try { const s = JSON.parse(localStorage.getItem(LS)); if (s && s.v) return s; } catch (e) {} return defaults(); }
+let S = load();
+function save() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) { toast('Не удалось сохранить: ' + e.message); } }
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+/* ===== Форматирование ===== */
+const nf = new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const nf0 = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
+const eur = n => nf.format(n || 0) + ' €';
+const eur0 = n => nf0.format(Math.round(n || 0)) + ' €';
+const usd = n => nf.format(n || 0) + ' $';
+const pct = (a, b) => b > 0 ? Math.round(a / b * 100) + ' %' : '—';
+const parseNum = s => { const n = parseFloat(String(s || '').replace(/\s/g, '').replace(',', '.')); return isFinite(n) ? Math.round(n * 100) / 100 : NaN; };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const MONTHS = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
+const MONTHS_G = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+const MSHORT = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+const monthName = m => MONTHS[+m.slice(5, 7) - 1] + ' ' + m.slice(0, 4);
+const dayName = d => { const dt = new Date(d + 'T12:00'); const w = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'][dt.getDay()]; return (+d.slice(8)) + ' ' + MONTHS_G[+d.slice(5, 7) - 1] + ', ' + w; };
+const shortDate = d => (+d.slice(8)) + ' ' + MSHORT[+d.slice(5, 7) - 1];
+const addMonth = (m, k) => { let y = +m.slice(0, 4), mo = +m.slice(5, 7) - 1 + k; y += Math.floor(mo / 12); mo = ((mo % 12) + 12) % 12; return y + '-' + pad(mo + 1); };
+const daysIn = m => new Date(+m.slice(0, 4), +m.slice(5, 7), 0).getDate();
+
+const cat = id => S.categories.find(c => c.id === id);
+const catName = id => (cat(id) || {}).name || 'Без категории';
+const acc = id => S.accounts.find(a => a.id === id);
+const accName = id => (acc(id) || {}).name || '—';
+
+/* ===== Расчёты ===== */
+function monthTx(m) { return S.tx.filter(t => t.date.slice(0, 7) === m); }
+function sums(list) {
+  const r = { inc: 0, exp: 0, inv: 0, invUsd: 0, byIn: {}, byOut: {}, byAcc: {} };
+  for (const t of list) {
+    const a = r.byAcc[t.acc] || (r.byAcc[t.acc] = { inc: 0, exp: 0, inv: 0 });
+    if (t.type === 'in') { r.inc += t.amount; r.byIn[t.cat] = (r.byIn[t.cat] || 0) + t.amount; a.inc += t.amount; }
+    else if (t.type === 'out') { r.exp += t.amount; r.byOut[t.cat] = (r.byOut[t.cat] || 0) + t.amount; a.exp += t.amount; }
+    else if (t.type === 'invest') { r.inv += t.amount; r.invUsd += t.usd || 0; a.inv += t.amount; }
+  }
+  return r;
+}
+function balance(id) {
+  const a = acc(id); let b = a ? (+a.start || 0) : 0;
+  for (const t of S.tx) {
+    if (t.acc === id) { if (t.type === 'in') b += t.amount; else b -= t.amount; }
+    if (t.type === 'transfer' && t.to === id) b += t.amount;
+  }
+  return Math.round(b * 100) / 100;
+}
+/* План: ежемесячные платежи повторяются сами, разовые — в своём месяце.
+   Неоплаченный разовый из прошлого месяца показывается в текущем как «просрочен». */
+function planFor(m) {
+  const out = [], cur = thisMonth();
+  for (const p of S.plans) {
+    let inst = null;
+    if (p.monthly) {
+      if (m >= p.from && (!p.until || m <= p.until) && !(p.skip || []).includes(m))
+        inst = { p, month: m, date: m + '-' + pad(Math.min(p.day || 1, daysIn(m))) };
+    } else if (p.date) {
+      const pm = p.date.slice(0, 7);
+      if (pm === m) inst = { p, month: pm, date: p.date };
+      else if (m === cur && pm < cur && !paidTx(p.id, pm)) inst = { p, month: pm, date: p.date, overdue: true };
+    }
+    if (inst) { inst.tx = paidTx(p.id, inst.month); out.push(inst); }
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+const paidTx = (pid, month) => S.tx.find(t => t.planId === pid && t.planMonth === month);
+
+/* ===== Навигация ===== */
+let tab = 'home', M = thisMonth(), opsFilter = { type: 'all', cat: null }, showDone = false;
+const ICONS = {
+  home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
+  ops: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>',
+  plan: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4M8.5 15l2 2 4-4"/></svg>',
+  inv: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg>',
+  more: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>'
+};
+const TABS = [['home', 'Главная'], ['ops', 'Операции'], ['plan', 'План'], ['inv', 'Инвестиции'], ['more', 'Ещё']];
+function go(t) { tab = t; render(); window.scrollTo(0, 0); }
+function render() {
+  const v = document.getElementById('view');
+  if (!S.setup) { document.getElementById('tabs').innerHTML = ''; document.getElementById('actions').hidden = true; v.innerHTML = setupView(); return; }
+  document.getElementById('tabs').innerHTML = TABS.map(([k, n]) => `<button class="${k === tab ? 'on' : ''}" onclick="go('${k}')">${ICONS[k]}${n}</button>`).join('');
+  const withActions = tab === 'home' || tab === 'ops';
+  document.getElementById('actions').hidden = !withActions;
+  v.classList.toggle('has-actions', withActions);
+  v.innerHTML = ({ home: homeView, ops: opsView, plan: planView, inv: invView, more: moreView })[tab]();
+}
+function monthNav() {
+  return `<div class="monthnav"><button class="iconbtn" onclick="M=addMonth(M,-1);render()" aria-label="Предыдущий месяц">‹</button>
+  <b onclick="M=thisMonth();render()">${monthName(M)}</b>
+  <button class="iconbtn" onclick="M=addMonth(M,1);render()" aria-label="Следующий месяц">›</button></div>`;
+}
+
+/* ===== Первый запуск ===== */
+function setupView() {
+  return `<h1>Личные финансы</h1><p class="ink2">Внесите остатки на сегодня. Всё хранится только на этом телефоне.</p>
+  <div class="card"><h2>Остатки на счетах, €</h2>
+  ${S.accounts.map(a => `<label class="f">${esc(a.name)}</label><input class="inp num" id="st_${a.id}" inputmode="decimal" placeholder="0,00" value="${a.start ? String(a.start).replace('.', ',') : ''}">`).join('')}
+  <label class="f">Дата начала учёта</label><input class="inp" type="date" id="st_date" value="${S.startDate}"></div>
+  <div class="card"><h2>Ежемесячные подписки</h2><p class="small muted" style="margin-top:-6px">Впишите сумму и день списания — они сами появятся в плане каждого месяца. Пустые строки пропустятся, добавить можно и позже.</p>
+  ${['iCloud', 'ChatGPT', 'Claude', 'YouTube Premium', 'Google One'].map((n, i) => `<div class="row" style="margin-top:10px"><input class="inp grow" id="sb_n${i}" value="${n}"><input class="inp num" style="width:96px" id="sb_a${i}" inputmode="decimal" placeholder="€"><input class="inp num" style="width:64px" id="sb_d${i}" inputmode="numeric" placeholder="день"></div>`).join('')}
+  </div>
+  <button class="btn" onclick="finishSetup()">Начать</button>
+  <button class="btn sec" onclick="importFile()">Восстановить из резервной копии</button>`;
+}
+function finishSetup() {
+  for (const a of S.accounts) { const n = parseNum(document.getElementById('st_' + a.id).value); a.start = isNaN(n) ? 0 : n; }
+  S.startDate = document.getElementById('st_date').value || todayISO();
+  const subs = S.categories.find(c => c.type === 'out' && c.name === 'ПО и подписки');
+  for (let i = 0; i < 5; i++) {
+    const name = document.getElementById('sb_n' + i).value.trim(), amt = parseNum(document.getElementById('sb_a' + i).value);
+    const day = Math.min(31, Math.max(1, parseInt(document.getElementById('sb_d' + i).value) || 1));
+    if (name && amt > 0) S.plans.push({ id: uid(), name, cat: subs && subs.id, amount: amt, monthly: true, day, from: S.startDate.slice(0, 7), acc: 'revolut' });
+  }
+  S.setup = true; save(); render();
+}
+
+/* ===== Главная ===== */
+function hbars(map, total, base, color, kind) {
+  const rows = Object.entries(map).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  if (!rows.length) return '<div class="empty">Пока нет операций</div>';
+  const max = rows[0][1];
+  return rows.map(([id, v]) => `<button class="hbar" onclick="opsFilter={type:'${kind}',cat:'${id}'};go('ops')">
+    <span class="nm">${esc(catName(id))}</span>
+    <span><i class="track" style="display:block;width:${Math.max(2, v / max * 100)}%;background:${color}"></i></span>
+    <span class="amt num">${eur(v)}<small>${pct(v, total)}${base ? ' · ' + pct(v, base) + ' дохода' : ''}</small></span></button>`).join('');
+}
+function trendChart() {
+  const months = []; for (let i = 5; i >= 0; i--) months.push(addMonth(M, -i));
+  const data = months.map(m => { const s = sums(monthTx(m)); return { m, inc: s.inc, exp: s.exp }; });
+  const max = Math.max(1, ...data.flatMap(d => [d.inc, d.exp]));
+  const W = 340, H = 150, top = 8, bot = 22, gw = W / 6, bw = 14, gap = 2;
+  const y = v => top + (H - top - bot) * (1 - v / max);
+  const bar = (x, v, c) => { if (v <= 0) return ''; const yy = y(v), h = H - bot - yy, r = Math.min(4, h); return `<path d="M${x},${H - bot} V${yy + r} Q${x},${yy} ${x + r},${yy} H${x + bw - r} Q${x + bw},${yy} ${x + bw},${yy + r} V${H - bot} Z" fill="${c}"/>`; };
+  let g = `<line x1="0" x2="${W}" y1="${H - bot}" y2="${H - bot}" stroke="var(--line)"/>`;
+  data.forEach((d, i) => {
+    const cx = gw * i + gw / 2;
+    g += `<g onclick="trendCap(${i})" style="cursor:pointer"><rect x="${gw * i}" y="0" width="${gw}" height="${H}" fill="transparent"/>
+      ${bar(cx - bw - gap / 2, d.inc, 'var(--inc)')}${bar(cx + gap / 2, d.exp, 'var(--exp)')}
+      <text x="${cx}" y="${H - 6}" text-anchor="middle" ${d.m === M ? 'style="fill:var(--ink);font-weight:600"' : ''}>${MSHORT[+d.m.slice(5) - 1]}</text></g>`;
+  });
+  window._trend = data;
+  return `<div class="legend"><span><i class="dot" style="background:var(--inc)"></i>Доходы</span><span><i class="dot" style="background:var(--exp)"></i>Расходы</span></div>
+  <svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Доходы и расходы за 6 месяцев">${g}</svg>
+  <div class="chart-cap num" id="trendCap">Нажмите на месяц, чтобы увидеть суммы</div>`;
+}
+function trendCap(i) { const d = window._trend[i]; document.getElementById('trendCap').innerHTML = `<b style="text-transform:capitalize">${monthName(d.m)}</b>: доходы ${eur(d.inc)} · расходы ${eur(d.exp)} · ${d.exp && d.inc ? 'расходы ' + pct(d.exp, d.inc) + ' дохода' : ''}`; }
+
+function homeView() {
+  const s = sums(monthTx(M)), pl = planFor(M), left = pl.filter(x => !x.tx).reduce((a, x) => a + x.p.amount, 0);
+  const result = s.inc - s.exp; /* инвестиции — не трата, показываются отдельно */
+  const share = s.inc > 0 ? s.exp / s.inc : 0;
+  const total = S.accounts.reduce((a, x) => a + balance(x.id), 0);
+  const all = sums(S.tx);
+  const accRows = S.accounts.map(a => { const r = s.byAcc[a.id] || { inc: 0, exp: 0, inv: 0 }; return `<tr><td>${esc(a.name)}</td><td class="num">${eur(r.inc)}</td><td class="num">${eur(r.exp + r.inv)}</td><td class="num"><b>${eur(balance(a.id))}</b></td></tr>`; }).join('');
+  return `<h1>Личные финансы</h1>${monthNav()}
+  <div class="tiles">
+    <div class="tile"><div class="lbl"><i class="dot" style="background:var(--inc)"></i>Доходы</div><div class="val num">${eur0(s.inc)}</div></div>
+    <div class="tile"><div class="lbl"><i class="dot" style="background:var(--exp)"></i>Расходы</div><div class="val num">${eur0(s.exp)}</div></div>
+    <div class="tile"><div class="lbl"><i class="dot" style="background:var(--inv)"></i>В инвестиции</div><div class="val num">${eur0(s.inv)}</div></div>
+    <div class="tile"><div class="lbl">Итог месяца</div><div class="val num ${result >= 0 ? 'pos' : 'neg'}">${result >= 0 ? '+' : '−'}${eur0(Math.abs(result))}</div></div>
+  </div>
+  <div class="card"><div class="row between"><b>Расходы от дохода</b><b class="num ${share > 1 ? 'neg' : ''}">${pct(s.exp, s.inc)}</b></div>
+    <div class="meter"><i style="width:${Math.min(100, share * 100)}%;background:${share > 1 ? 'var(--bad)' : 'var(--exp)'}"></i></div>
+    <div class="small ink2 num">Потрачено ${eur(s.exp)} из ${eur(s.inc)}${s.inv ? ` · в инвестиции ${pct(s.inv, s.inc)} дохода` : ''}</div></div>
+  <div class="card" onclick="go('plan')" style="cursor:pointer"><div class="row between"><b>Ещё предстоит по плану</b><b class="num">${eur(left)}</b></div>
+    <div class="small ink2" style="margin-top:4px">${pl.filter(x => !x.tx).length} платеж(а) из ${pl.length} · свободно после плана: <b class="num ${result - left < 0 ? 'neg' : ''}">${eur(result - left)}</b></div></div>
+  <div class="card"><h2>Расходы по категориям</h2>${hbars(s.byOut, s.exp, s.inc, 'var(--exp)', 'out')}</div>
+  <div class="card"><h2>Доходы по категориям</h2>${hbars(s.byIn, s.inc, 0, 'var(--inc)', 'in')}</div>
+  <div class="card"><h2>Доходы и расходы за полгода</h2>${trendChart()}</div>
+  <div class="card"><h2>По источникам за ${MONTHS[+M.slice(5) - 1]}</h2>
+    <table><thead><tr><th>Счёт</th><th>Приход</th><th>Расход</th><th>Остаток</th></tr></thead><tbody>${accRows}</tbody>
+    <tfoot><tr><td>Итого</td><td class="num">${eur(s.inc)}</td><td class="num">${eur(s.exp + s.inv)}</td><td class="num">${eur(total)}</td></tr></tfoot></table>
+    <div class="small muted" style="margin-top:8px">«Расход» по счёту включает пополнения биржи. Переводы между своими счетами — не доход и не расход.</div></div>
+  <div class="card"><h2>За всё время</h2><div class="small muted" style="margin-top:-8px;margin-bottom:6px">с ${shortDate(S.startDate)} ${S.startDate.slice(0, 4)}</div>
+    <table><tbody><tr><td>Доходы</td><td class="num">${eur(all.inc)}</td></tr><tr><td>Расходы</td><td class="num">${eur(all.exp)}</td></tr>
+    <tr><td>В инвестиции</td><td class="num">${eur(all.inv)} · ${usd(all.invUsd)}</td></tr><tr><td>Расходы от дохода</td><td class="num">${pct(all.exp, all.inc)}</td></tr></tbody></table></div>`;
+}
+
+/* ===== Операции ===== */
+function txLine(t) {
+  const sign = t.type === 'in' ? '+' : t.type === 'transfer' ? '' : '−';
+  const color = t.type === 'in' ? 'var(--inc)' : t.type === 'out' ? 'var(--exp)' : t.type === 'invest' ? 'var(--inv)' : 'var(--ink3)';
+  const title = t.type === 'transfer' ? `Перемещение: ${esc(accName(t.acc))} → ${esc(accName(t.to))}` : t.type === 'invest' ? 'Пополнение биржи' : esc(catName(t.cat));
+  const sub = [t.type === 'transfer' ? '' : esc(accName(t.acc)), t.type === 'invest' ? (t.usd ? usd(t.usd) : '<span class="badge bad">впишите $</span>') : '', esc(t.note || '')].filter(Boolean).join(' · ');
+  return `<button class="it" onclick="${t.type === 'invest' ? `openInv('${t.id}')` : `openTx({id:'${t.id}'})`}"><i class="dot" style="background:${color}"></i>
+    <div class="grow"><div class="ttl">${title}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>
+    <b class="num" style="white-space:nowrap">${sign}${eur(t.amount)}</b></button>`;
+}
+function opsView() {
+  let list = monthTx(M);
+  if (opsFilter.type !== 'all') list = list.filter(t => t.type === opsFilter.type);
+  if (opsFilter.cat) list = list.filter(t => t.cat === opsFilter.cat);
+  list.sort((a, b) => b.date.localeCompare(a.date) || (b.ts || 0) - (a.ts || 0));
+  const f = (k, n) => `<button class="chip ${opsFilter.type === k && !opsFilter.cat ? 'on' : ''}" onclick="opsFilter={type:'${k}',cat:null};render()">${n}</button>`;
+  let html = `<h1>Операции</h1>${monthNav()}<div class="chips" style="margin:8px 0">${f('all', 'Все')}${f('in', 'Приходы')}${f('out', 'Расходы')}${f('transfer', 'Перемещения')}${f('invest', 'Инвестиции')}
+    ${opsFilter.cat ? `<button class="chip on" onclick="opsFilter.cat=null;render()">${esc(catName(opsFilter.cat))} ✕</button>` : ''}</div>`;
+  if (!list.length) return html + '<div class="card"><div class="empty">Операций нет. Нажмите «＋ Приход» или «− Расход».</div></div>';
+  const days = {}; for (const t of list) (days[t.date] = days[t.date] || []).push(t);
+  for (const d of Object.keys(days)) {
+    const s = sums(days[d]);
+    html += `<div class="daycap"><span>${dayName(d)}</span><span class="num">${s.inc ? '+' + eur(s.inc) + ' ' : ''}${s.exp ? '−' + eur(s.exp) : ''}</span></div><div class="card list" style="margin-top:0;padding:4px 16px">${days[d].map(txLine).join('')}</div>`;
+  }
+  const s = sums(list);
+  return html + `<p class="small muted num" style="text-align:center">Итого: приходы ${eur(s.inc)} · расходы ${eur(s.exp)}</p>`;
+}
+
+/* ===== Форма операции ===== */
+let F = null;
+function openTx(o) {
+  if (o.id) { const t = S.tx.find(x => x.id === o.id); F = { ...t }; }
+  else F = { type: o.type || 'out', date: o.date || todayISO(), amount: o.amount || '', cat: o.cat || null, acc: o.acc || lastAcc(), to: null, note: o.note || '', planId: o.planId, planMonth: o.planMonth };
+  if (F.type === 'transfer' && !F.to) F.to = S.accounts.find(a => a.id !== F.acc)?.id;
+  sheet(txForm());
+}
+function lastAcc() { const t = [...S.tx].reverse().find(x => x.type !== 'transfer'); return (t && acc(t.acc)) ? t.acc : S.accounts[0].id; }
+function txForm() {
+  const typeBtn = (k, n) => `<button class="${F.type === k ? 'on' : ''}" onclick="keepAmt();F.type='${k}';F.cat=null;if(k==='transfer'&&!F.to)F.to=S.accounts.find(a=>a.id!==F.acc).id;sheet(txForm())">${n}</button>`;
+  const cats = S.categories.filter(c => c.type === F.type && (!c.hidden || c.id === F.cat));
+  const accChips = (field) => S.accounts.map(a => `<button class="chip ${F[field] === a.id ? 'on' : ''}" onclick="keepAmt();F.${field}='${a.id}';sheet(txForm())">${esc(a.name)}</button>`).join('');
+  return `<h2>${F.id ? 'Операция' : F.planId ? 'Отметить оплату' : 'Новая операция'}</h2>
+  <div class="seg">${typeBtn('out', 'Расход')}${typeBtn('in', 'Приход')}${typeBtn('transfer', 'Перемещение')}</div>
+  <input class="inp big num" id="f_amt" inputmode="decimal" placeholder="0,00 €" value="${F.amount ? String(F.amount).replace('.', ',') : ''}" style="margin-top:14px">
+  <label class="f">Дата</label><input class="inp" type="date" id="f_date" value="${F.date}" onchange="F.date=this.value">
+  ${F.type === 'transfer' ? `<p class="small muted" style="margin:10px 0 0">Между своими счетами: на одном ушло, на другом пришло. Не доход и не расход.</p><label class="f">Откуда</label><div class="chips">${accChips('acc')}</div><label class="f">Куда</label><div class="chips">${accChips('to')}</div>` : `
+  <label class="f">Категория</label><div class="chips">${cats.map(c => `<button class="chip ${F.cat === c.id ? 'on' : ''}" onclick="keepAmt();F.cat='${c.id}';sheet(txForm())">${esc(c.name)}</button>`).join('')}
+    <button class="chip add" onclick="keepAmt();newCat(F.type,id=>{F.cat=id;sheet(txForm())})">＋ своя</button></div>
+  <label class="f">${F.type === 'in' ? 'Куда поступило' : 'Откуда списано'}</label><div class="chips">${accChips('acc')}</div>`}
+  <label class="f">Комментарий</label><input class="inp" id="f_note" value="${esc(F.note || '')}" placeholder="необязательно">
+  <div style="margin-top:20px"><button class="btn" onclick="saveTx()">Сохранить</button>
+  ${F.id ? `<button class="btn danger" onclick="delTx()">Удалить</button>` : ''}</div>`;
+}
+function keepAmt() { const a = document.getElementById('f_amt'), n = document.getElementById('f_note'); if (a) F.amount = a.value; if (n) F.note = n.value; const d = document.getElementById('f_date'); if (d) F.date = d.value; }
+function saveTx() {
+  keepAmt();
+  const amount = parseNum(F.amount);
+  if (!(amount > 0)) return toast('Введите сумму');
+  if (!F.date) return toast('Выберите дату');
+  if (F.type !== 'transfer' && !F.cat) return toast('Выберите категорию');
+  if (F.type === 'transfer' && F.acc === F.to) return toast('Счета должны отличаться');
+  const t = { id: F.id || uid(), ts: F.ts || Date.now(), type: F.type, date: F.date, amount, acc: F.acc, note: (F.note || '').trim() };
+  if (F.type === 'transfer') t.to = F.to; else t.cat = F.cat;
+  if (F.planId) { t.planId = F.planId; t.planMonth = F.planMonth; }
+  const i = S.tx.findIndex(x => x.id === t.id); if (i >= 0) S.tx[i] = t; else S.tx.push(t);
+  save(); closeSheet(); M = t.date.slice(0, 7); render(); toast(F.planId && i < 0 ? 'Оплачено и убрано из плана' : 'Сохранено');
+}
+function delTx() { if (!confirm('Удалить операцию?')) return; S.tx = S.tx.filter(x => x.id !== F.id); save(); closeSheet(); render(); toast('Удалено'); }
+
+/* ===== Категории ===== */
+function newCat(type, cb) {
+  const name = (prompt(type === 'in' ? 'Новая категория дохода' : 'Новая категория расхода') || '').trim();
+  if (!name) return;
+  const ex = S.categories.find(c => c.type === type && c.name.toLowerCase() === name.toLowerCase());
+  if (ex) { ex.hidden = false; save(); return cb && cb(ex.id); }
+  const c = { id: uid(), type, name, hidden: false }; S.categories.push(c); save(); cb && cb(c.id);
+}
+function renameCat(id) { const c = cat(id); const n = (prompt('Название категории', c.name) || '').trim(); if (n) { c.name = n; save(); render(); } }
+function toggleCat(id) { const c = cat(id); c.hidden = !c.hidden; save(); render(); }
+
+/* ===== План ===== */
+function planView() {
+  const pl = planFor(M), left = pl.filter(x => !x.tx), done = pl.filter(x => x.tx);
+  const sum = a => a.reduce((s, x) => s + (x.tx ? x.tx.amount : x.p.amount), 0);
+  const line = x => `<div class="it">
+    <button class="chk ${x.tx ? 'on' : ''}" onclick="${x.tx ? `openTx({id:'${x.tx.id}'})` : `payPlan('${x.p.id}','${x.month}','${x.date}')`}" aria-label="Оплачено">✓</button>
+    <button class="grow" style="text-align:left;min-width:0" onclick="openPlan('${x.p.id}','${M}')">
+      <div class="ttl">${esc(x.p.name)}</div>
+      <div class="sub">${shortDate(x.tx ? x.tx.date : x.date)} · ${esc(catName(x.p.cat))}${x.p.monthly ? ' · каждый месяц' : ''} ${x.overdue ? '<span class="badge bad">просрочен</span>' : ''}</div></button>
+    <b class="num" style="white-space:nowrap">${eur(x.tx ? x.tx.amount : x.p.amount)}</b></div>`;
+  return `<h1>План платежей</h1>${monthNav()}
+  <div class="tiles"><div class="tile"><div class="lbl">Ещё предстоит</div><div class="val num">${eur0(sum(left))}</div></div>
+  <div class="tile"><div class="lbl">Уже оплачено</div><div class="val num">${eur0(sum(done))}</div></div></div>
+  <div class="card list" style="padding:4px 16px">${left.length ? left.map(line).join('') : '<div class="empty">Всё по плану оплачено</div>'}</div>
+  <button class="btn" onclick="openPlan()">＋ Добавить платёж в план</button>
+  ${done.length ? `<button class="linkbtn" style="margin-top:14px" onclick="showDone=!showDone;render()">${showDone ? '▾' : '▸'} Оплачено (${done.length})</button>
+  ${showDone ? `<div class="card list" style="padding:4px 16px">${done.map(line).join('')}</div>` : ''}` : ''}
+  <p class="small muted">Галочка ✓ — откроется расход с суммой из плана (можно поправить). После сохранения платёж попадёт в операции и уйдёт из «предстоит».</p>`;
+}
+function payPlan(pid, month, date) {
+  const p = S.plans.find(x => x.id === pid), t = todayISO();
+  openTx({ type: 'out', amount: p.amount, cat: p.cat, acc: p.acc || lastAcc(), note: p.name, planId: pid, planMonth: month, date: date <= t ? date : (month === t.slice(0, 7) ? t : date) });
+}
+let P = null;
+function openPlan(id, m) {
+  P = id ? { ...S.plans.find(x => x.id === id), _m: m } : { name: '', cat: null, amount: '', monthly: false, day: new Date().getDate(), date: M === thisMonth() ? todayISO() : M + '-01', acc: S.accounts[0].id, from: M };
+  sheet(planForm());
+}
+function keepPlan() { const g = k => document.getElementById(k); if (g('p_name')) P.name = g('p_name').value; if (g('p_amt')) P.amount = g('p_amt').value; if (g('p_day')) P.day = g('p_day').value; if (g('p_date')) P.date = g('p_date').value; }
+function planForm() {
+  const cats = S.categories.filter(c => c.type === 'out' && (!c.hidden || c.id === P.cat));
+  return `<h2>${P.id ? 'Платёж в плане' : 'Новый платёж в план'}</h2>
+  <label class="f">Что</label><input class="inp" id="p_name" value="${esc(P.name)}" placeholder="например, подарок маме">
+  <label class="f">Сумма, €</label><input class="inp num" id="p_amt" inputmode="decimal" value="${P.amount ? String(P.amount).replace('.', ',') : ''}" placeholder="0,00">
+  <div class="row between" style="margin-top:16px"><div><b>Каждый месяц</b><div class="small muted">подписка или регулярный платёж</div></div>
+  <label class="switch"><input type="checkbox" ${P.monthly ? 'checked' : ''} onchange="keepPlan();P.monthly=this.checked;sheet(planForm())"><span></span></label></div>
+  ${P.monthly ? `<label class="f">День списания</label><input class="inp num" id="p_day" inputmode="numeric" value="${P.day || 1}">`
+      : `<label class="f">Когда</label><input class="inp" type="date" id="p_date" value="${P.date || todayISO()}">`}
+  <label class="f">Категория</label><div class="chips">${cats.map(c => `<button class="chip ${P.cat === c.id ? 'on' : ''}" onclick="keepPlan();P.cat='${c.id}';sheet(planForm())">${esc(c.name)}</button>`).join('')}
+    <button class="chip add" onclick="keepPlan();newCat('out',id=>{P.cat=id;sheet(planForm())})">＋ своя</button></div>
+  <label class="f">Откуда обычно платится</label><div class="chips">${S.accounts.map(a => `<button class="chip ${P.acc === a.id ? 'on' : ''}" onclick="keepPlan();P.acc='${a.id}';sheet(planForm())">${esc(a.name)}</button>`).join('')}</div>
+  <div style="margin-top:20px"><button class="btn" onclick="savePlan()">Сохранить</button>
+  ${P.id && P.monthly && P._m ? `<button class="btn sec" onclick="skipPlan()">Пропустить: ${monthName(P._m)}</button>
+  <button class="btn sec" onclick="stopPlan()">Больше не повторять после: ${monthName(P._m)}</button>` : ''}
+  ${P.id ? `<button class="btn danger" onclick="delPlan()">Удалить из плана</button>` : ''}</div>`;
+}
+function savePlan() {
+  keepPlan();
+  const amount = parseNum(P.amount);
+  if (!P.name.trim()) return toast('Как назвать платёж?');
+  if (!(amount > 0)) return toast('Введите сумму');
+  if (!P.cat) return toast('Выберите категорию');
+  const p = { id: P.id || uid(), name: P.name.trim(), cat: P.cat, amount, monthly: !!P.monthly, acc: P.acc, skip: P.skip || [] };
+  if (p.monthly) { p.day = Math.min(31, Math.max(1, parseInt(P.day) || 1)); p.from = P.from || M; if (P.until) p.until = P.until; }
+  else { if (!P.date) return toast('Выберите дату'); p.date = P.date; }
+  const i = S.plans.findIndex(x => x.id === p.id); if (i >= 0) S.plans[i] = p; else S.plans.push(p);
+  save(); closeSheet(); if (!p.monthly) M = p.date.slice(0, 7); render(); toast('В плане');
+}
+function skipPlan() { const p = S.plans.find(x => x.id === P.id); (p.skip = p.skip || []).push(P._m); save(); closeSheet(); render(); toast('Пропущено в этом месяце'); }
+function stopPlan() { const p = S.plans.find(x => x.id === P.id); p.until = P._m; save(); closeSheet(); render(); toast('Больше не повторяется'); }
+function delPlan() {
+  if (!confirm('Удалить платёж из плана? Уже внесённые оплаты останутся в операциях.')) return;
+  S.plans = S.plans.filter(x => x.id !== P.id); save(); closeSheet(); render();
+}
+
+/* ===== Инвестиции ===== */
+function invView() {
+  const list = S.tx.filter(t => t.type === 'invest').sort((a, b) => b.date.localeCompare(a.date));
+  const e = list.reduce((s, t) => s + t.amount, 0), u = list.reduce((s, t) => s + (t.usd || 0), 0);
+  const ms = sums(monthTx(M));
+  return `<h1>Инвестиции</h1>
+  <div class="tiles"><div class="tile"><div class="lbl">Вложено всего</div><div class="val num">${eur0(e)}</div></div>
+  <div class="tile"><div class="lbl">Зачислено на биржу</div><div class="val num">${nf0.format(Math.round(u))} $</div></div></div>
+  <div class="card"><div class="row between"><span class="ink2">Средний курс</span><b class="num">${e > 0 && u > 0 ? '1 € = ' + (u / e).toFixed(4).replace('.', ',') + ' $' : '—'}</b></div>
+  <div class="row between" style="margin-top:8px"><span class="ink2">За ${MONTHS[+M.slice(5) - 1]}</span><b class="num">${eur(ms.inv)} · ${usd(ms.invUsd)}</b></div>
+  <div class="row between" style="margin-top:8px"><span class="ink2">Доля от дохода за месяц</span><b class="num">${pct(ms.inv, ms.inc)}</b></div></div>
+  <button class="btn" style="background:var(--inv);color:#fff" onclick="openInv()">＋ Пополнить биржу</button>
+  <div class="card list" style="padding:4px 16px">${list.length ? list.map(t => txLine(t).replace('Пополнение биржи', 'Пополнение · ' + shortDate(t.date) + ' ' + t.date.slice(0, 4))).join('') : '<div class="empty">Пополнений пока нет</div>'}</div>
+  <p class="small muted">Пополнение биржи списывает евро со счёта, но не считается расходом — на главной оно показано отдельно, «В инвестиции».</p>`;
+}
+let I = null;
+function openInv(id) {
+  I = id ? { ...S.tx.find(x => x.id === id) } : { type: 'invest', date: todayISO(), amount: '', usd: '', acc: 'revolut', note: '' };
+  if (!acc(I.acc)) I.acc = S.accounts[0].id;
+  sheet(invForm());
+}
+function keepInv() { const g = k => document.getElementById(k); I.amount = g('i_eur').value; I.usd = g('i_usd').value; I.date = g('i_date').value; I.note = g('i_note').value; }
+function invRate() { const e = parseNum(document.getElementById('i_eur').value), u = parseNum(document.getElementById('i_usd').value); document.getElementById('i_rate').textContent = e > 0 && u > 0 ? 'Курс: 1 € = ' + (u / e).toFixed(4).replace('.', ',') + ' $' : ''; }
+function invForm() {
+  return `<h2>${I.id ? 'Пополнение биржи' : 'Пополнить биржу'}</h2>
+  <label class="f">Списано, €</label><input class="inp big num" id="i_eur" inputmode="decimal" oninput="invRate()" value="${I.amount ? String(I.amount).replace('.', ',') : ''}" placeholder="0,00 €">
+  <label class="f">Зачислено на биржу, $</label><input class="inp big num" id="i_usd" inputmode="decimal" oninput="invRate()" value="${I.usd ? String(I.usd).replace('.', ',') : ''}" placeholder="0,00 $">
+  <div class="small muted num" id="i_rate" style="text-align:center;margin-top:6px"></div>
+  <label class="f">Дата</label><input class="inp" type="date" id="i_date" value="${I.date}">
+  <label class="f">С какого счёта</label><div class="chips">${S.accounts.map(a => `<button class="chip ${I.acc === a.id ? 'on' : ''}" onclick="keepInv();I.acc='${a.id}';sheet(invForm());invRate()">${esc(a.name)}</button>`).join('')}</div>
+  <label class="f">Комментарий</label><input class="inp" id="i_note" value="${esc(I.note || '')}" placeholder="например, брокер">
+  <div style="margin-top:20px"><button class="btn" style="background:var(--inv);color:#fff" onclick="saveInv()">Сохранить</button>
+  ${I.id ? `<button class="btn danger" onclick="F={id:I.id};delTx()">Удалить</button>` : ''}</div>`;
+}
+function saveInv() {
+  keepInv();
+  const amount = parseNum(I.amount), u = parseNum(I.usd);
+  if (!(amount > 0)) return toast('Сколько евро списано?');
+  if (!(u > 0)) return toast('Сколько долларов зачислено?');
+  const t = { id: I.id || uid(), ts: I.ts || Date.now(), type: 'invest', date: I.date || todayISO(), amount, usd: u, acc: I.acc, note: (I.note || '').trim() };
+  const i = S.tx.findIndex(x => x.id === t.id); if (i >= 0) S.tx[i] = t; else S.tx.push(t);
+  save(); closeSheet(); render(); toast('Сохранено');
+}
+
+/* ===== Ещё: счета, категории, копия ===== */
+function moreView() {
+  const catList = type => S.categories.filter(c => c.type === type).map(c => `<div class="it">
+    <button class="grow ttl" style="text-align:left;${c.hidden ? 'color:var(--ink3);text-decoration:line-through' : ''}" onclick="renameCat('${c.id}')">${esc(c.name)}</button>
+    <button class="badge" onclick="toggleCat('${c.id}')">${c.hidden ? 'вернуть' : 'скрыть'}</button></div>`).join('');
+  return `<h1>Настройки</h1>
+  <div class="card"><h2>Счета</h2><div class="list">${S.accounts.map(a => `<button class="it" onclick="editAcc('${a.id}')"><div class="grow"><div class="ttl">${esc(a.name)}</div><div class="sub">старт ${eur(a.start)}</div></div><b class="num">${eur(balance(a.id))}</b></button>`).join('')}</div>
+    <button class="linkbtn" onclick="addAcc()">＋ Добавить счёт</button>
+    <button class="linkbtn" style="display:block" onclick="openTx({type:'transfer'})">⇄ Перемещение между счетами</button></div>
+  <div class="card"><h2>Категории расходов</h2><div class="list">${catList('out')}</div><button class="linkbtn" onclick="newCat('out',()=>render())">＋ Добавить</button></div>
+  <div class="card"><h2>Категории доходов</h2><div class="list">${catList('in')}</div><button class="linkbtn" onclick="newCat('in',()=>render())">＋ Добавить</button></div>
+  <div class="card"><h2>Резервная копия</h2><p class="small ink2" style="margin-top:-6px">Данные лежат только в этом телефоне. Раз в месяц сохраняйте копию в «Файлы» или iCloud Drive.</p>
+    <button class="btn sec" onclick="exportFile()">Сохранить копию</button><button class="btn sec" onclick="importFile()">Восстановить из копии</button>
+    <p class="small muted">Операций: ${S.tx.length} · учёт с ${shortDate(S.startDate)} ${S.startDate.slice(0, 4)}</p></div>
+  <button class="btn danger" onclick="resetAll()">Стереть все данные</button>`;
+}
+function editAcc(id) {
+  const a = acc(id);
+  sheet(`<h2>${esc(a.name)}</h2><label class="f">Название</label><input class="inp" id="a_name" value="${esc(a.name)}">
+  <label class="f">Остаток на начало учёта (${shortDate(S.startDate)}), €</label><input class="inp num" id="a_start" inputmode="decimal" value="${String(a.start || 0).replace('.', ',')}">
+  <p class="small muted">Сейчас: ${eur(balance(id))}</p><button class="btn" onclick="saveAcc('${id}')">Сохранить</button>
+  ${S.tx.some(t => t.acc === id || t.to === id) ? '' : `<button class="btn danger" onclick="delAcc('${id}')">Удалить счёт</button>`}`);
+}
+function saveAcc(id) { const a = acc(id), n = document.getElementById('a_name').value.trim(), s = parseNum(document.getElementById('a_start').value); if (n) a.name = n; a.start = isNaN(s) ? 0 : s; save(); closeSheet(); render(); }
+function delAcc(id) { if (!confirm('Удалить счёт?')) return; S.accounts = S.accounts.filter(a => a.id !== id); save(); closeSheet(); render(); }
+function addAcc() { const n = (prompt('Название счёта') || '').trim(); if (!n) return; const id = uid(); S.accounts.push({ id, name: n, kind: 'bank', start: 0 }); save(); editAcc(id); }
+function exportFile() {
+  const blob = new Blob([JSON.stringify(S, null, 1)], { type: 'application/json' });
+  const name = 'Личные финансы ' + todayISO() + '.json';
+  const file = new File([blob], name, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) { navigator.share({ files: [file], title: name }).catch(() => {}); return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+function importFile() {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'application/json,.json';
+  inp.onchange = () => { const f = inp.files[0]; if (!f) return; f.text().then(txt => {
+    try { const d = JSON.parse(txt); if (!d.v || !Array.isArray(d.tx)) throw new Error('не тот файл');
+      if (!confirm(`Заменить текущие данные копией? В копии операций: ${d.tx.length}.`)) return;
+      S = d; S.setup = true; save(); render(); toast('Восстановлено'); } catch (e) { alert('Не получилось прочитать файл: ' + e.message); } }); };
+  inp.click();
+}
+function resetAll() { if (!confirm('Стереть ВСЕ операции, план и настройки на этом телефоне?')) return; if (!confirm('Точно? Без резервной копии вернуть нельзя.')) return; S = defaults(); save(); render(); }
+
+/* ===== Нижняя панель (sheet) и уведомления ===== */
+function sheet(html) {
+  const sh = document.getElementById('sheet'), bg = document.getElementById('sheetBg'), wasOpen = sh.classList.contains('open');
+  const st = sh.scrollTop;
+  sh.innerHTML = '<div class="grab"></div>' + html; sh.hidden = false; bg.hidden = false;
+  if (wasOpen) sh.scrollTop = st; else requestAnimationFrame(() => { sh.classList.add('open'); bg.classList.add('open'); });
+}
+function closeSheet() {
+  const sh = document.getElementById('sheet'), bg = document.getElementById('sheetBg');
+  sh.classList.remove('open'); bg.classList.remove('open');
+  setTimeout(() => { sh.hidden = true; bg.hidden = true; sh.innerHTML = ''; }, 250);
+}
+let tt; function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('on'), 1800); }
+
+render();
+if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
