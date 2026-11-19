@@ -128,6 +128,7 @@ svg text{fill:var(--ink3);font-size:11px}
 .bal-accs button{background:var(--bg);border-radius:12px;padding:8px 10px;text-align:left;display:flex;flex-direction:column;gap:2px;min-width:0}
 .bal-accs b{font-size:15px;white-space:nowrap}
 .flow td{padding:8px 0}
+.flow td.num{white-space:nowrap}
 .flow tr.sum td{font-weight:650;border-top:1.5px solid var(--ink3)}
 </style>
 </head>
@@ -218,8 +219,9 @@ function balance(id) {
   return Math.round(b * 100) / 100;
 }
 /* Остаток счёта на начало дня `date` (операции строго раньше этой даты). */
+const accStart = a => a.startDate || S.startDate;
 function balanceBefore(id, date) {
-  const a = acc(id); let b = a ? (+a.start || 0) : 0;
+  const a = acc(id); let b = a && accStart(a) <= date ? (+a.start || 0) : 0;
   for (const t of S.tx) {
     if (t.date >= date) continue;
     if (t.acc === id) { if (t.type === 'in') b += t.amount; else b -= t.amount; }
@@ -398,7 +400,7 @@ function planCard(pl, left, result) {
   }).join('');
   return `<div class="card"><div class="row between"><b>Ещё предстоит по плану</b><b class="num">${eur(left)}</b></div>
     <div class="list" style="margin-top:6px">${rows || '<div class="empty" style="padding:12px 0">Всё по плану оплачено</div>'}</div>
-    <div class="row between small" style="margin-top:8px"><span class="ink2">Свободно после плана: <b class="num ${result - left < 0 ? 'neg' : ''}" style="white-space:nowrap">${eur(result - left)}</b></span>
+    <div class="row between small" style="margin-top:8px;flex-wrap:wrap"><span class="ink2">Свободно после плана: <b class="num ${result - left < 0 ? 'neg' : ''}" style="white-space:nowrap">${eur(result - left)}</b></span>
     <button class="linkbtn" style="font-size:14px" onclick="go('plan')">Весь план ›</button></div></div>`;
 }
 function homeView() {
@@ -409,6 +411,7 @@ function homeView() {
   const all = sums(S.tx);
   const d0 = M + '-01', d1 = addMonth(M, 1) + '-01', isCur = M === thisMonth();
   const open = totalBefore(d0), close = totalBefore(d1);
+  const newStarts = S.accounts.filter(a => accStart(a) > d0 && accStart(a) < d1 && a.start);
   const n2 = v => nf.format(v || 0);
   const accRows = S.accounts.map(a => { const r = s.byAcc[a.id] || { inc: 0, exp: 0, inv: 0 }; return `<tr><td>${esc(a.name)}</td><td class="num">${n2(balanceBefore(a.id, d0))}</td><td class="num">${n2(r.inc)}</td><td class="num">${n2(r.exp + r.inv)}</td><td class="num"><b>${n2(balanceBefore(a.id, d1))}</b></td></tr>`; }).join('');
   const flowLbl = isCur ? 'Сейчас' : 'На конец месяца';
@@ -421,6 +424,7 @@ function homeView() {
   </div>
   <div class="card"><h2>Движение денег</h2><table class="flow"><tbody>
     <tr><td>На 1 ${MONTHS_G[+M.slice(5) - 1]}</td><td class="num">${eur(open)}</td></tr>
+    ${newStarts.map(a => `<tr><td>＋ ${esc(a.name)}: остаток на ${shortDate(accStart(a))}</td><td class="num">+${eur(a.start)}</td></tr>`).join('')}
     <tr><td>＋ Приход</td><td class="num">+${eur(s.inc)}</td></tr>
     <tr><td>− Расход</td><td class="num">−${eur(s.exp)}</td></tr>
     ${s.inv ? `<tr><td>− В инвестиции</td><td class="num">−${eur(s.inv)}</td></tr>` : ''}
@@ -637,7 +641,7 @@ function moreView() {
     <button class="grow ttl" style="text-align:left;${c.hidden ? 'color:var(--ink3);text-decoration:line-through' : ''}" onclick="renameCat('${c.id}')">${esc(c.name)}</button>
     <button class="badge" onclick="toggleCat('${c.id}')">${c.hidden ? 'вернуть' : 'скрыть'}</button></div>`).join('');
   return `<h1>Настройки</h1>
-  <div class="card"><h2>Счета</h2><div class="list">${S.accounts.map(a => `<button class="it" onclick="editAcc('${a.id}')"><div class="grow"><div class="ttl">${esc(a.name)}</div><div class="sub">старт ${eur(a.start)}</div></div><b class="num">${eur(balance(a.id))}</b></button>`).join('')}</div>
+  <div class="card"><h2>Счета</h2><div class="list">${S.accounts.map(a => `<button class="it" onclick="editAcc('${a.id}')"><div class="grow"><div class="ttl">${esc(a.name)}</div><div class="sub">остаток ${eur(a.start)} на ${shortDate(accStart(a))}</div></div><b class="num">${eur(balance(a.id))}</b></button>`).join('')}</div>
     <button class="linkbtn" onclick="addAcc()">＋ Добавить счёт</button>
     <button class="linkbtn" style="display:block" onclick="openTx({type:'transfer'})">⇄ Перемещение между счетами</button></div>
   <div class="card"><h2>Категории расходов</h2><div class="list">${catList('out')}</div><button class="linkbtn" onclick="newCat('out',()=>render())">＋ Добавить</button></div>
@@ -651,11 +655,13 @@ function moreView() {
 function editAcc(id) {
   const a = acc(id);
   sheet(`<h2>${esc(a.name)}</h2><label class="f">Название</label><input class="inp" id="a_name" value="${esc(a.name)}">
-  <label class="f">Остаток на начало учёта (${shortDate(S.startDate)}), €</label><input class="inp num" id="a_start" inputmode="decimal" value="${String(a.start || 0).replace('.', ',')}">
+  <label class="f">Остаток, €</label><input class="inp num" id="a_start" inputmode="decimal" value="${String(a.start || 0).replace('.', ',')}">
+  <label class="f">На какую дату (на начало дня)</label><input class="inp" type="date" id="a_date" value="${accStart(a)}">
+  <p class="small muted">Операции до этой даты по счёту не вносите — они уже учтены в остатке.</p>
   <p class="small muted">Сейчас: ${eur(balance(id))}</p><button class="btn" onclick="saveAcc('${id}')">Сохранить</button>
   ${S.tx.some(t => t.acc === id || t.to === id) ? '' : `<button class="btn danger" onclick="delAcc('${id}')">Удалить счёт</button>`}`);
 }
-function saveAcc(id) { const a = acc(id), n = document.getElementById('a_name').value.trim(), s = parseNum(document.getElementById('a_start').value); if (n) a.name = n; a.start = isNaN(s) ? 0 : s; save(); closeSheet(); render(); }
+function saveAcc(id) { const a = acc(id), n = document.getElementById('a_name').value.trim(), s = parseNum(document.getElementById('a_start').value); if (n) a.name = n; a.start = isNaN(s) ? 0 : s; const dd = document.getElementById('a_date').value; if (dd) a.startDate = dd; save(); closeSheet(); render(); }
 function delAcc(id) { if (!confirm('Удалить счёт?')) return; S.accounts = S.accounts.filter(a => a.id !== id); save(); closeSheet(); render(); }
 function addAcc() { const n = (prompt('Название счёта') || '').trim(); if (!n) return; const id = uid(); S.accounts.push({ id, name: n, kind: 'bank', start: 0 }); save(); editAcc(id); }
 function exportFile() {
