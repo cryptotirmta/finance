@@ -456,7 +456,7 @@ function txLine(t) {
   const sign = t.type === 'in' || t.type === 'divest' ? '+' : t.type === 'transfer' ? '' : '−';
   const color = t.type === 'in' ? 'var(--inc)' : t.type === 'out' ? 'var(--exp)' : isInv ? 'var(--inv)' : 'var(--ink3)';
   const title = t.type === 'transfer' ? `Перемещение: ${esc(accName(t.acc))} → ${esc(accName(t.to))}` : t.type === 'invest' ? 'Инвестиции' : t.type === 'divest' ? 'Доход от инвестиций' : esc(catName(t.cat));
-  const sub = [t.type === 'transfer' ? '' : esc(accName(t.acc)), isInv ? (t.usd ? usd(t.usd) : '<span class="badge bad">впишите $</span>') : '', esc(t.note || '')].filter(Boolean).join(' · ');
+  const sub = [t.type === 'transfer' ? '' : esc(accName(t.acc)), isInv ? (t.usd ? usd(t.usd) : `<span class="badge bad" onclick="event.stopPropagation();openUsd('${t.id}')">вписать $ ›</span>`) : '', esc(t.note || '')].filter(Boolean).join(' · ');
   return `<button class="it" onclick="openTx({id:'${t.id}'})"><i class="dot" style="background:${color}"></i>
     <div class="grow"><div class="ttl">${title}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>
     <b class="num" style="white-space:nowrap">${sign}${eur(t.amount)}</b></button>`;
@@ -491,6 +491,7 @@ function openTx(o) {
   if (F.type === 'transfer' && !F.to) F.to = S.accounts.find(a => a.id !== F.acc)?.id;
   sheet(txForm());
 }
+function openUsd(id) { openTx({ id }); setTimeout(() => { const u = document.getElementById('f_usd'); if (u) { u.scrollIntoView({ block: 'center' }); u.focus(); } }, 300); }
 function lastAcc() { const t = [...S.tx].reverse().find(x => x.type !== 'transfer'); return (t && acc(t.acc)) ? t.acc : S.accounts[0].id; }
 function txForm() {
   const typeBtn = (k, n) => `<button class="${F.type === k ? 'on' : ''}" onclick="keepAmt();F.type='${k}';F.cat=null;if(k==='transfer'&&!F.to)F.to=S.accounts.find(a=>a.id!==F.acc).id;sheet(txForm())">${n}</button>`;
@@ -616,11 +617,13 @@ function invView() {
   const list = S.tx.filter(t => t.type === 'invest' || t.type === 'divest').sort((a, b) => b.date.localeCompare(a.date) || (b.ts || 0) - (a.ts || 0));
   const all = sums(S.tx), ms = sums(monthTx(M));
   const nowE = all.inv - all.div, nowU = all.invUsd - all.divUsd;
-  const noUsd = list.filter(t => !t.usd).length;
+  const noUsd = list.filter(t => !t.usd), noUsdFirst = noUsd[0];
   return `<h1>Инвестиции</h1>
   <div class="tiles"><div class="tile"><div class="lbl"><i class="dot" style="background:var(--inv)"></i>Сейчас в инвестициях</div><div class="val num ${nowE < 0 ? 'pos' : ''}">${eur0(nowE)}</div></div>
   <div class="tile"><div class="lbl">На бирже, $</div><div class="val num">${nf0.format(Math.round(nowU))} $</div></div></div>
-  ${noUsd ? `<div class="card small" style="color:var(--bad)">У ${noUsd} операц. не вписана сумма в $ — нажмите на неё ниже.</div>` : ''}
+  ${noUsdFirst ? `<button class="card" style="display:block;width:100%;text-align:left;border:1.5px solid var(--bad)" onclick="openUsd('${noUsdFirst.id}')">
+    <div class="row between"><span class="small" style="color:var(--bad)">${noUsd.length === 1 ? 'Не вписана сумма в $' : 'Не вписана сумма в $ у ' + noUsd.length + ' операций'}: ${eur(noUsdFirst.amount)} от ${shortDate(noUsdFirst.date)}</span>
+    <span class="chip on" style="flex:none">Вписать $</span></div></button>` : ''}
   <div class="card"><table><tbody>
     <tr><td>Вложено всего</td><td class="num">${eur(all.inv)} · ${usd(all.invUsd)}</td></tr>
     <tr><td>Выведено всего</td><td class="num">${eur(all.div)} · ${usd(all.divUsd)}</td></tr>
