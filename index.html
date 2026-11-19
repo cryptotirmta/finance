@@ -239,8 +239,43 @@ const ICONS = {
 };
 const TABS = [['home', 'Главная'], ['ops', 'Операции'], ['plan', 'План'], ['inv', 'Инвестиции'], ['more', 'Ещё']];
 function go(t) { tab = t; render(); window.scrollTo(0, 0); }
+/* ===== ПИН-код на вход (хранится только как хэш на этом телефоне) ===== */
+const PINK = 'lichnye-finansy.pin';
+let locked = true, pinBuf = '', pinFirst = null, hiddenAt = 0;
+const pinHash = () => { try { return localStorage.getItem(PINK); } catch (e) { return null; } };
+async function sha(s) { const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('lf-pin:' + s)); return [...new Uint8Array(h)].map(x => x.toString(16).padStart(2, '0')).join(''); }
+function pinView(title, note) {
+  const dots = [0, 1, 2, 3].map(i => `<i style="width:16px;height:16px;border-radius:8px;display:inline-block;margin:0 9px;${i < pinBuf.length ? 'background:var(--ink)' : 'border:2px solid var(--ink3)'}"></i>`).join('');
+  const k = n => `<button onclick="pinKey('${n}')" style="height:72px;border-radius:36px;font-size:28px;background:${n === '' ? 'transparent' : 'var(--card)'}" ${n === '' ? 'disabled' : ''}>${n === 'del' ? '⌫' : n}</button>`;
+  return `<div style="text-align:center;padding-top:8vh"><h1 style="font-size:24px">${title}</h1><p class="ink2 small" style="min-height:20px">${note || ''}</p>
+  <div style="margin:22px 0 34px">${dots}</div>
+  <div style="display:grid;grid-template-columns:repeat(3,76px);gap:18px 26px;justify-content:center">${['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del'].map(k).join('')}</div></div>`;
+}
+let pinNote = '';
+async function pinKey(n) {
+  if (n === 'del') pinBuf = pinBuf.slice(0, -1); else if (pinBuf.length < 4) pinBuf += n;
+  if (pinBuf.length === 4) {
+    const v = pinBuf; pinBuf = '';
+    if (pinHash()) { if (await sha(v) === pinHash()) { locked = false; pinNote = ''; } else pinNote = 'Неверный ПИН'; }
+    else if (!pinFirst) { pinFirst = v; pinNote = 'Повторите ПИН'; }
+    else if (pinFirst === v) { try { localStorage.setItem(PINK, await sha(v)); } catch (e) {} locked = false; pinFirst = null; pinNote = ''; toast('ПИН установлен'); }
+    else { pinFirst = null; pinNote = 'Не совпало, придумайте заново'; }
+  }
+  render();
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) hiddenAt = Date.now();
+  else if (pinHash() && Date.now() - hiddenAt > 60000) { locked = true; closeSheet(); render(); }
+});
+function changePin() { if (!confirm('Сменить ПИН-код?')) return; try { localStorage.removeItem(PINK); } catch (e) {} pinFirst = null; locked = true; render(); }
+
 function render() {
   const v = document.getElementById('view');
+  if (S.setup && (!pinHash() || locked)) {
+    document.getElementById('tabs').innerHTML = ''; document.getElementById('actions').hidden = true; v.classList.remove('has-actions');
+    v.innerHTML = pinHash() ? pinView('Личные финансы', pinNote || 'Введите ПИН') : pinView(pinFirst ? 'Повторите ПИН' : 'Придумайте ПИН-код', pinNote || '4 цифры — для входа в приложение');
+    return;
+  }
   if (!S.setup) { document.getElementById('tabs').innerHTML = ''; document.getElementById('actions').hidden = true; v.innerHTML = setupView(); return; }
   document.getElementById('tabs').innerHTML = TABS.map(([k, n]) => `<button class="${k === tab ? 'on' : ''}" onclick="go('${k}')">${ICONS[k]}${n}</button>`).join('');
   const withActions = tab === 'home' || tab === 'ops';
@@ -256,15 +291,32 @@ function monthNav() {
 
 /* ===== Первый запуск ===== */
 function setupView() {
-  return `<h1>Личные финансы</h1><p class="ink2">Внесите остатки на сегодня. Всё хранится только на этом телефоне.</p>
+  return `<h1>Личные финансы</h1>
+  <div class="card"><h2>Загрузить мои данные</h2><p class="small ink2" style="margin-top:-6px">Операции из выписок, уже разнесённые по категориям. Нужен код доступа.</p>
+  <input class="inp" id="enc_code" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="код доступа">
+  <button class="btn" style="margin-top:10px" onclick="loadEnc()">Загрузить</button></div>
+  <p class="ink2">Или начните с нуля: внесите остатки на сегодня. Всё хранится только на этом телефоне.</p>
   <div class="card"><h2>Остатки на счетах, €</h2>
   ${S.accounts.map(a => `<label class="f">${esc(a.name)}</label><input class="inp num" id="st_${a.id}" inputmode="decimal" placeholder="0,00" value="${a.start ? String(a.start).replace('.', ',') : ''}">`).join('')}
   <label class="f">Дата начала учёта</label><input class="inp" type="date" id="st_date" value="${S.startDate}"></div>
   <div class="card"><h2>Ежемесячные подписки</h2><p class="small muted" style="margin-top:-6px">Впишите сумму и день списания — они сами появятся в плане каждого месяца. Пустые строки пропустятся, добавить можно и позже.</p>
   ${['iCloud', 'ChatGPT', 'Claude', 'YouTube Premium', 'Google One'].map((n, i) => `<div class="row" style="margin-top:10px"><input class="inp grow" id="sb_n${i}" value="${n}"><input class="inp num" style="width:96px" id="sb_a${i}" inputmode="decimal" placeholder="€"><input class="inp num" style="width:64px" id="sb_d${i}" inputmode="numeric" placeholder="день"></div>`).join('')}
   </div>
-  <button class="btn" onclick="finishSetup()">Начать</button>
+  <button class="btn" onclick="finishSetup()">Начать с нуля</button>
   <button class="btn sec" onclick="importFile()">Восстановить из резервной копии</button>`;
+}
+async function loadEnc() {
+  const code = document.getElementById('enc_code').value.trim();
+  if (!code) return toast('Введите код');
+  try {
+    const enc = await fetch('data.enc', { cache: 'no-store' }).then(r => { if (!r.ok) throw new Error('файла с данными нет на сайте'); return r.json(); });
+    const b = s => Uint8Array.from(atob(s), ch => ch.charCodeAt(0));
+    const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(code), 'PBKDF2', false, ['deriveKey']);
+    const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b(enc.salt), iterations: enc.iter, hash: 'SHA-256' }, km, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    let buf; try { buf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b(enc.iv) }, key, b(enc.data)); } catch (e) { return toast('Неверный код'); }
+    const d = JSON.parse(new TextDecoder().decode(buf));
+    S = d; S.setup = true; save(); render(); toast(`Загружено операций: ${S.tx.length}`);
+  } catch (e) { alert('Не получилось: ' + e.message); }
 }
 function finishSetup() {
   for (const a of S.accounts) { const n = parseNum(document.getElementById('st_' + a.id).value); a.start = isNaN(n) ? 0 : n; }
@@ -543,6 +595,7 @@ function moreView() {
   <div class="card"><h2>Резервная копия</h2><p class="small ink2" style="margin-top:-6px">Данные лежат только в этом телефоне. Раз в месяц сохраняйте копию в «Файлы» или iCloud Drive.</p>
     <button class="btn sec" onclick="exportFile()">Сохранить копию</button><button class="btn sec" onclick="importFile()">Восстановить из копии</button>
     <p class="small muted">Операций: ${S.tx.length} · учёт с ${shortDate(S.startDate)} ${S.startDate.slice(0, 4)}</p></div>
+  <button class="btn sec" onclick="changePin()">Сменить ПИН-код</button>
   <button class="btn danger" onclick="resetAll()">Стереть все данные</button>`;
 }
 function editAcc(id) {
